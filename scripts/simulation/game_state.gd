@@ -3,6 +3,7 @@ extends RefCounted
 
 enum Phase {
 	PREPARING,
+	BRIEF,
 	TRADING,
 	RESOLVING,
 	DEBRIEF,

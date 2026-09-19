@@ -12,8 +12,10 @@ func test_prepare_and_live_samples_use_trading_contract() -> void:
 	var state = GAME_STATE.new(2026, 2)
 	var simulator = MARKET_SIMULATOR.new(2026)
 	var projections := simulator.prepare_day(state)
-	assert_eq(state.phase, GAME_STATE.Phase.TRADING)
+	assert_eq(state.phase, GAME_STATE.Phase.BRIEF)
 	assert_eq(projections.size(), state.stocks.size())
+	assert_true(simulator.start_trading(state))
+	assert_eq(state.phase, GAME_STATE.Phase.TRADING)
 	var initial_history_size := state.get_stock("AUR").live_price_history_pence.size()
 	var updates := simulator.update_live_prices(state, 0.5)
 	assert_eq(updates.size(), state.stocks.size())
@@ -25,6 +27,7 @@ func test_live_noise_is_bounded_and_more_visible_during_round() -> void:
 	var state = GAME_STATE.new(2026, 2)
 	var simulator = MARKET_SIMULATOR.new(2026)
 	simulator.prepare_day(state)
+	simulator.start_trading(state)
 	var opening_prices: Dictionary = {}
 	for stock in state.stocks:
 		opening_prices[stock.symbol] = stock.round_open_price_pence
@@ -60,6 +63,7 @@ func test_resolution_reports_open_close_percentage_and_news() -> void:
 	var state = GAME_STATE.new(88, 2)
 	var simulator = MARKET_SIMULATOR.new(88)
 	simulator.prepare_day(state)
+	simulator.start_trading(state)
 	var opening_prices: Dictionary = {}
 	for stock in state.stocks:
 		opening_prices[stock.symbol] = stock.round_open_price_pence
@@ -79,6 +83,8 @@ func test_same_seed_matches_projections_live_samples_and_resolution() -> void:
 	var first_projections := first_simulator.prepare_day(first_state)
 	var second_projections := second_simulator.prepare_day(second_state)
 	assert_eq(first_projections, second_projections)
+	first_simulator.start_trading(first_state)
+	second_simulator.start_trading(second_state)
 	first_simulator.update_live_prices(first_state, 0.5)
 	second_simulator.update_live_prices(second_state, 0.5)
 	assert_eq(_prices(first_state), _prices(second_state))
@@ -92,10 +98,14 @@ func test_same_seed_matches_with_configured_multi_stock_catalog() -> void:
 	assert_eq(first_state.stocks.size(), 4)
 	assert_eq(first_state.stocks[3].symbol, "DSK")
 	assert_eq(first_simulator.prepare_day(first_state), second_simulator.prepare_day(second_state))
+	first_simulator.start_trading(first_state)
+	second_simulator.start_trading(second_state)
 	first_simulator.update_live_prices(first_state, 0.5)
 	second_simulator.update_live_prices(second_state, 0.5)
 	assert_eq(_prices(first_state), _prices(second_state))
 	assert_eq(first_simulator.resolve_day(first_state), second_simulator.resolve_day(second_state))
+	first_simulator.start_trading(first_state)
+	second_simulator.start_trading(second_state)
 
 func test_pump_changes_live_price_path() -> void:
 	var normal_state = GAME_STATE.new(515, 2)
@@ -104,10 +114,14 @@ func test_pump_changes_live_price_path() -> void:
 	var pumped_simulator = MARKET_SIMULATOR.new(515)
 	normal_simulator.prepare_day(normal_state)
 	pumped_simulator.prepare_day(pumped_state)
+	normal_simulator.start_trading(normal_state)
+	pumped_simulator.start_trading(pumped_state)
 	var pump_result := TRADE_SERVICE.new().pump(pumped_state, "AUR")
 	assert_true(pump_result["success"])
 	normal_simulator.update_live_prices(normal_state, 0.75)
 	pumped_simulator.update_live_prices(pumped_state, 0.75)
+	normal_simulator.start_trading(normal_state)
+	pumped_simulator.start_trading(pumped_state)
 	assert_gt(pumped_state.get_stock("AUR").current_price_pence, normal_state.get_stock("AUR").current_price_pence)
 
 func test_pumped_resolution_is_seeded_and_reports_correction() -> void:
@@ -119,6 +133,8 @@ func test_pumped_resolution_is_seeded_and_reports_correction() -> void:
 	second_simulator.prepare_day(second_state)
 	assert_true(TRADE_SERVICE.new().pump(first_state, "AUR")["success"])
 	assert_true(TRADE_SERVICE.new().pump(second_state, "AUR")["success"])
+	first_simulator.start_trading(first_state)
+	second_simulator.start_trading(second_state)
 	var first_resolutions := first_simulator.resolve_day(first_state)
 	var second_resolutions := second_simulator.resolve_day(second_state)
 	assert_eq(first_resolutions, second_resolutions)
@@ -133,6 +149,8 @@ func test_pump_changes_resolution_path_under_same_seed() -> void:
 	var pumped_simulator = MARKET_SIMULATOR.new(717)
 	normal_simulator.prepare_day(normal_state)
 	pumped_simulator.prepare_day(pumped_state)
+	normal_simulator.start_trading(normal_state)
+	pumped_simulator.start_trading(pumped_state)
 	assert_true(TRADE_SERVICE.new().pump(pumped_state, "AUR")["success"])
 	var normal_resolution := normal_simulator.resolve_day(normal_state)[0]
 	var pumped_resolution := pumped_simulator.resolve_day(pumped_state)[0]

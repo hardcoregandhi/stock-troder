@@ -3,6 +3,7 @@ extends Node
 
 signal run_started(state_snapshot: Dictionary)
 signal day_prepared(day_number: int, projections: Array[Dictionary], news: Array[Dictionary])
+signal brief_started(day_number: int, projections: Array[Dictionary], news: Array[Dictionary])
 signal time_updated(seconds_remaining: float)
 signal market_updated(state_snapshot: Dictionary)
 signal trade_completed(trade_result: Dictionary)
@@ -65,8 +66,9 @@ func start_network_host(lobby: NetworkLobby, player_ids: Array[int], run_seed: i
 		player_state.phase = game_state.phase
 		network_player_states[player_id] = player_state
 		network_ready_players[player_id] = false
-	network_ready_players[network_local_player_id] = true
 	_publish_network_state()
+	if game_state != null and game_state.phase == GameState.Phase.BRIEF:
+		brief_started.emit(game_state.current_day, [], [])
 
 func start_network_client(lobby: NetworkLobby, player_id: int) -> void:
 	network_lobby = lobby
@@ -88,6 +90,8 @@ func receive_network_intent(peer_id: int, action: String, symbol: String, quanti
 		_execute_network_trade(peer_id, trade_service.sell(network_player_states[peer_id], symbol, quantity))
 	elif action == "ready_for_next_day":
 		_mark_network_player_ready(peer_id)
+	elif action == "ready_for_trading":
+		_mark_network_player_ready_for_trading(peer_id)
 
 func remove_network_player(peer_id: int) -> void:
 	if not network_is_host:
@@ -148,6 +152,28 @@ func continue_to_next_day() -> bool:
 		_publish_network_state()
 	return true
 
+func start_trading_round() -> bool:
+	if network_mode and not network_is_host:
+		network_lobby.submit_ready_for_trading()
+		return false
+	if network_mode and network_is_host:
+		network_ready_players[network_local_player_id] = true
+		if not _all_network_players_ready():
+			network_status_changed.emit("Waiting for every player to start trading.")
+			return false
+		for player_id in network_ready_players:
+			network_ready_players[player_id] = false
+	if game_state == null or game_state.phase != GameState.Phase.BRIEF:
+		return false
+	if not market_simulator.start_trading(game_state):
+		return false
+	day_timer.start(DAY_LENGTH_SECONDS)
+	if network_mode and network_is_host:
+		for player_state in network_player_states.values():
+			player_state.phase = GameState.Phase.TRADING
+		_publish_network_state()
+	return true
+
 func state_snapshot() -> Dictionary:
 	if game_state == null:
 		return {}
@@ -183,7 +209,7 @@ func apply_network_snapshot(snapshot: Dictionary) -> void:
 		game_state = GameState.create_default(0, int(market.get("total_days", GameState.DEFAULT_TOTAL_DAYS)))
 	game_state.current_day = int(market.get("day", game_state.current_day))
 	game_state.total_days = int(market.get("total_days", game_state.total_days))
-	game_state.phase = GameState.Phase.get(str(market.get("phase", "TRADING")), GameState.Phase.TRADING)
+	game_state.phase = GameState.Phase.get(str(market.get("phase", "BRIEF")), GameState.Phase.BRIEF)
 	completed_rounds = market.get("completed_rounds", []).duplicate(true)
 	game_state.cash_pence = int(portfolio.get("cash_pence", game_state.cash_pence))
 	for symbol in game_state.holdings:
@@ -211,6 +237,8 @@ func apply_network_event(event: Dictionary) -> void:
 			_execute_trade(event["result"])
 		"day_resolved":
 			day_resolved.emit(int(event["day"]), event["resolutions"], state_snapshot())
+		"brief_started":
+			brief_started.emit(int(event["day"]), event.get("projections", []), event.get("news", []))
 		"run_completed":
 			run_completed.emit(event["summary"])
 		"time":
@@ -264,6 +292,15 @@ func _mark_network_player_ready(player_id: int) -> void:
 	else:
 		network_lobby.send_match_event({"type": "status", "message": "Player %d is ready. Waiting for the rest." % player_id})
 
+func _mark_network_player_ready_for_trading(player_id: int) -> void:
+	if game_state == null or game_state.phase != GameState.Phase.BRIEF:
+		return
+	network_ready_players[player_id] = true
+	if _all_network_players_ready():
+		start_trading_round()
+	else:
+		network_lobby.send_match_event({"type": "status", "message": "Player %d is ready to trade. Waiting for the rest." % player_id})
+
 func _all_network_players_ready() -> bool:
 	for player_id in network_player_states:
 		if not bool(network_ready_players.get(player_id, false)):
@@ -280,7 +317,7 @@ func _prepare_day() -> void:
 	for projection in projections:
 		news.append({"symbol": projection["symbol"], "text": projection["news"]})
 	day_prepared.emit(game_state.current_day, projections, news)
-	day_timer.start(DAY_LENGTH_SECONDS)
+	brief_started.emit(game_state.current_day, projections, news)
 	if network_mode and network_is_host:
 		for player_state in network_player_states.values():
 			player_state.phase = game_state.phase
@@ -367,6 +404,10 @@ func _round_record(day: int, resolutions: Array[Dictionary]) -> Dictionary:
 		"day": day,
 		"resolutions": resolutions.duplicate(true),
 		"stocks": records,
+		"player_cash_pence": game_state.cash_pence,
+		"player_portfolio_value_pence": game_state.portfolio_value_pence(),
+		"player_return_pence": game_state.total_return_pence(),
+		"player_holdings": game_state.holdings.duplicate(),
 		"pump_markers": resolutions.filter(func(item: Dictionary) -> bool: return bool(item.get("pump_used", false))),
 		"sabotage_markers": [],
 	}

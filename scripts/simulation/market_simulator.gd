@@ -29,8 +29,14 @@ func prepare_day(state: GameState) -> Array[Dictionary]:
 		var high := projection + forecast_noise
 		stock.set_projection(projection, low, high, str(event.get("text", "Quiet trading day")), news_impact)
 		projections.append(_projection_record(stock))
-	state.phase = GameState.Phase.TRADING
+	state.phase = GameState.Phase.BRIEF
 	return projections
+
+func start_trading(state: GameState) -> bool:
+	if state.phase != GameState.Phase.BRIEF:
+		return false
+	state.phase = GameState.Phase.TRADING
+	return true
 
 func update_live_prices(state: GameState, progress: float) -> Array[Dictionary]:
 	if state.phase != GameState.Phase.TRADING:

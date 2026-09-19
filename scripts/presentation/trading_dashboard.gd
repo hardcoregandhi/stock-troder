@@ -34,6 +34,12 @@ var summary_panel: PanelContainer
 var summary_layer: Control
 var debrief_panel: PanelContainer
 var debrief_layer: Control
+	var brief_panel: PanelContainer
+	var brief_layer: Control
+	var debrief_chart: StockHistoryChart
+	var debrief_chart_tabs: HBoxContainer
+	var debrief_day_series: Array[Dictionary] = []
+	var debrief_game_series: Array[Dictionary] = []
 var selected_symbol := "AUR"
 var row_labels: Dictionary = {}
 var news_feed: VBoxContainer
@@ -97,6 +103,7 @@ func setup(new_session: TradingSession) -> void:
 	_build_ui()
 	session.run_started.connect(_on_state_changed)
 	session.day_prepared.connect(_on_day_prepared)
+	session.brief_started.connect(_on_brief_started)
 	session.time_updated.connect(_on_time_updated)
 	session.market_updated.connect(_on_market_updated)
 	session.day_resolved.connect(_on_day_resolved)
@@ -324,6 +331,15 @@ func _on_state_changed(_snapshot: Dictionary) -> void:
 func _on_day_prepared(_day: int, _projections: Array[Dictionary], _news: Array[Dictionary]) -> void:
 	_refresh()
 
+func _on_brief_started(day: int, _projections: Array[Dictionary], _news: Array[Dictionary]) -> void:
+	_refresh()
+	if session.game_state.phase == GameState.Phase.BRIEF:
+		if brief_layer != null:
+			brief_layer.free()
+			brief_layer = null
+			brief_panel = null
+		_show_brief(day)
+
 func _on_time_updated(seconds: float) -> void:
 	if clock_label != null:
 		clock_label.text = "%.1fs" % seconds
@@ -331,6 +347,8 @@ func _on_time_updated(seconds: float) -> void:
 
 func _on_market_updated(_snapshot: Dictionary) -> void:
 	_refresh()
+	if session.game_state.phase == GameState.Phase.BRIEF and brief_panel == null and summary_panel == null:
+		_show_brief(session.game_state.current_day)
 
 func _on_day_resolved(day: int, resolutions: Array[Dictionary], _snapshot: Dictionary) -> void:
 	for resolution in resolutions:
@@ -574,16 +592,21 @@ func _show_debrief(day: int, resolutions: Array[Dictionary]) -> void:
 	content.add_theme_constant_override("separation", 8)
 	debrief_panel.add_child(content)
 	content.add_child(_label("DAY %d DEBRIEF" % day, 24, TEXT))
-	content.add_child(_label("Round results, completed history, and the next market outlook.", 12, MUTED))
-	var charts := HBoxContainer.new()
-	charts.add_theme_constant_override("separation", 12)
-	content.add_child(charts)
-	charts.add_child(_debrief_chart_panel("DAY GRAPH  |  % FROM ROUND OPEN", _day_graph_series(resolutions)))
-	charts.add_child(_debrief_chart_panel("GAME SO FAR  |  % FROM RUN OPEN", _game_graph_series()))
+	content.add_child(_label("Resolved prices, player result, action markers, and ranking.", 12, MUTED))
+	debrief_day_series = _day_graph_series(resolutions)
+	debrief_game_series = _game_graph_series()
+	content.add_child(_build_debrief_chart())
 	var results := VBoxContainer.new()
 	results.add_theme_constant_override("separation", 4)
 	content.add_child(results)
 	results.add_child(_label("RESOLVED NEWS AND ACTION MARKERS", 12, MUTED))
+	var round_record: Dictionary = session.completed_rounds.back() if not session.completed_rounds.is_empty() else {}
+	var player_result := int(round_record.get("player_return_pence", session.game_state.total_return_pence()))
+	results.add_child(_label("PLAYER RESULT  %s  |  PORTFOLIO %s  |  CASH %s" % [
+		_signed_pence(player_result),
+		_format_pence(int(round_record.get("player_portfolio_value_pence", session.game_state.portfolio_value_pence()))),
+		_format_pence(int(round_record.get("player_cash_pence", session.game_state.cash_pence))),
+	], 13, POSITIVE if player_result >= 0 else NEGATIVE))
 	results.add_child(_label("SABOTAGE: unavailable in this build", 11, MUTED))
 	for resolution in resolutions:
 		var change := float(resolution["percentage_change"]) * 100.0
@@ -603,9 +626,7 @@ func _show_debrief(day: int, resolutions: Array[Dictionary]) -> void:
 		row.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		results.add_child(row)
 		results.add_child(_label("PUMP MARKER: %s" % resolution["symbol"] if bool(resolution.get("pump_used", false)) else "PUMP MARKER: none", 11, ACCENT if bool(resolution.get("pump_used", false)) else MUTED))
-	content.add_child(_label("CURRENT HOLDINGS  |  %s  |  CASH %s" % [_holdings_text(session.game_state), _format_pence(session.game_state.cash_pence)], 13, TEXT))
 	content.add_child(_build_rankings_panel(_display_rankings()))
-	content.add_child(_next_day_outlook())
 	if session.game_state.phase == GameState.Phase.DEBRIEF:
 		var next_day := Button.new()
 		next_day.text = "NEXT DAY"
@@ -618,6 +639,55 @@ func _continue_after_debrief() -> void:
 		debrief_layer.queue_free()
 		debrief_layer = null
 		debrief_panel = null
+
+func _show_brief(day: int) -> void:
+	if brief_panel != null or summary_panel != null:
+		return
+	brief_layer = Control.new()
+	brief_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	brief_layer.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(brief_layer)
+	var background := ColorRect.new()
+	background.color = BG
+	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	background.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	brief_layer.add_child(background)
+	var margin := MarginContainer.new()
+	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	margin.add_theme_constant_override("margin_left", 28)
+	margin.add_theme_constant_override("margin_top", 22)
+	margin.add_theme_constant_override("margin_right", 28)
+	margin.add_theme_constant_override("margin_bottom", 22)
+	brief_layer.add_child(margin)
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	margin.add_child(scroll)
+	var page := VBoxContainer.new()
+	page.add_theme_constant_override("separation", 12)
+	page.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(page)
+	brief_panel = _panel()
+	brief_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	page.add_child(brief_panel)
+	var content := VBoxContainer.new()
+	content.add_theme_constant_override("separation", 8)
+	brief_panel.add_child(content)
+	content.add_child(_label("DAY %d BRIEF" % day, 24, TEXT))
+	content.add_child(_label("Review the next market stories, your holdings, and the match before trading starts.", 12, MUTED))
+	content.add_child(_next_day_outlook())
+	content.add_child(_label("YOUR HOLDINGS  |  CASH %s  |  %s" % [_format_pence(session.game_state.cash_pence), _holdings_text(session.game_state)], 13, TEXT))
+	content.add_child(_build_rankings_panel(_display_rankings()))
+	var start_button := Button.new()
+	start_button.text = "START TRADING"
+	start_button.custom_minimum_size.y = 38
+	start_button.pressed.connect(_start_trading_from_brief)
+	content.add_child(start_button)
+
+func _start_trading_from_brief() -> void:
+	if session.start_trading_round() and brief_panel != null:
+		brief_layer.queue_free()
+		brief_layer = null
+		brief_panel = null
 
 func _on_run_completed(summary: Dictionary) -> void:
 	if summary_panel != null:
@@ -669,6 +739,10 @@ func _restart_run() -> void:
 		summary_layer.free()
 		summary_layer = null
 	summary_panel = null
+	if brief_layer != null:
+		brief_layer.free()
+		brief_layer = null
+	brief_panel = null
 	row_labels.clear()
 	news_history.clear()
 	for child in stock_list.get_children():
@@ -680,18 +754,32 @@ func _restart_run() -> void:
 	selected_symbol = "AUR"
 	session.start_run()
 
-func _debrief_chart_panel(title: String, series: Array[Dictionary]) -> Control:
+func _build_debrief_chart() -> Control:
 	var panel := _panel()
-	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var content := VBoxContainer.new()
-	content.add_child(_label(title, 11, MUTED))
-	var graph := StockHistoryChart.new()
-	graph.custom_minimum_size = Vector2(0, 170)
-	graph.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	graph.set_series(series)
-	content.add_child(graph)
+	debrief_chart_tabs = HBoxContainer.new()
+	debrief_chart_tabs.add_theme_constant_override("separation", 8)
+	var day_tab := Button.new()
+	day_tab.text = "DAY RESULTS"
+	day_tab.pressed.connect(_show_debrief_chart.bind(false))
+	debrief_chart_tabs.add_child(day_tab)
+	var game_tab := Button.new()
+	game_tab.text = "GAME SO FAR"
+	game_tab.pressed.connect(_show_debrief_chart.bind(true))
+	debrief_chart_tabs.add_child(game_tab)
+	content.add_child(debrief_chart_tabs)
+	debrief_chart = StockHistoryChart.new()
+	debrief_chart.custom_minimum_size = Vector2(0, 190)
+	debrief_chart.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content.add_child(debrief_chart)
 	panel.add_child(content)
+	_show_debrief_chart(false)
 	return panel
+
+func _show_debrief_chart(game_so_far: bool) -> void:
+	if debrief_chart == null:
+		return
+	debrief_chart.set_series(debrief_game_series if game_so_far else debrief_day_series)
 
 func _day_graph_series(resolutions: Array[Dictionary]) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []

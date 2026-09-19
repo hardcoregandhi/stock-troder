@@ -50,8 +50,8 @@ Options should be stored locally. Do not add accounts or online settings yet.
 ```text
 Main
   -> MainMenu
-      -> SinglePlayerSession -> TradingDashboard -> Debrief -> RunSummary
-      -> MultiplayerLobby -> MultiplayerSession -> TradingDashboard -> RunSummary
+      -> SinglePlayerSession -> TradingDashboard -> Brief -> Trading -> Debrief -> Brief -> RunSummary
+      -> MultiplayerLobby -> MultiplayerSession -> TradingDashboard -> Brief -> Trading -> Debrief -> Brief -> RunSummary
       -> Options
       -> QuitConfirmation
 ```
@@ -74,7 +74,7 @@ Phase 2 uses a shared market with separate player portfolios.
 - Pump, sabotage, and planted news need a separate shared-market design before they affect other portfolios.
 - Target size: 2 to 6 players.
 - Match length: 10 rounds.
-- Round length: 30 seconds, with a debrief between rounds.
+- Round length: 30 seconds, with a brief before each round and a debrief after each resolved round.
 
 This gives multiplayer strategic comparison without requiring a full player-driven market simulation in the first network build.
 
@@ -207,5 +207,5 @@ Local test settings may expose round length in development builds, but scored ru
 - The host owns the market seed and timer.
 - Trades are validated on the host.
 - State snapshots are reproducible for debugging.
-- Debrief and Next Day remain synchronized.
+- Brief, Trading, Debrief, and Next Day remain synchronized.
 - Disconnects do not corrupt the match state.

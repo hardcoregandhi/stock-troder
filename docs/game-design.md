@@ -49,17 +49,17 @@ The first playable version should make the buy/sell/beat-the-clock loop enjoyabl
 Each run lasts a fixed number of trading days. The initial prototype should use **10 trading days**, **£1,000 starting cash**, and a **30-second live trading round** per day. The round length is a tuning value and may change after playtesting.
 
 1. The simulation generates a projection for each stock before the day starts.
-2. The player reviews current prices, projections, news, cash, and holdings.
-3. The trading clock starts at 30 seconds and prices begin updating in real time.
+2. A brief shows current prices, next-day projections, news, cash, holdings, and multiplayer rankings.
+3. The player selects **Start Trading**, then the clock starts at 30 seconds and prices begin updating in real time.
 4. Roughly twice per second, each stock receives a new live price sample based on its projection and volatility.
 5. The player buys and sells whole shares while the clock runs and prices move.
 6. When the clock reaches zero, the round resolves at its final prices.
-7. A debrief shows the day's result, news, price changes, and portfolio value.
-8. The player chooses **Next Day** when ready, then the next day's projection is generated and its live round begins.
+7. A debrief shows the day's resolved result, news, price changes, action markers, and ranking.
+8. The player chooses **Next Day** when ready to open the next brief, then selects **Start Trading**.
 9. After the final trading round, all holdings are liquidated at the final prices.
 10. The game displays the final cash, profit/loss, and a simple performance summary.
 
-The player should be able to understand the state of the market at a glance and make meaningful trades within each 30-second round. A trading day is one complete 30-second round, not one price update. There is no manual **End Day** button in Phase 1, but the player controls when to leave the debrief and start the next round.
+The player should be able to understand the state of the market at a glance and make meaningful trades within each 30-second round. A trading day is one complete 30-second round, not one price update. There is no manual **End Day** button in Phase 1, but the player controls when to leave the brief and start the next round.
 
 ## 4. Market Model
 
@@ -104,7 +104,7 @@ actual_change = projection + resolution_noise
 next_price = max(1.00, current_price * (1.0 + actual_change))
 ```
 
-The projection remains visible throughout the 30-second trading round. It represents the expected direction and approximate end-of-round movement, not a single delayed price update. The news item linked to that movement is revealed in the debrief.
+The projection remains visible in the brief and throughout the 30-second trading round. It represents the expected direction and approximate end-of-round movement, not a single delayed price update. The news item linked to that movement is shown in the brief and resolved in the debrief.
 
 During the round, the market produces a live price sample about every 0.5 seconds. Each sample moves toward the projected end-of-round price while adding a smaller random movement based on the stock's volatility:
 
@@ -112,7 +112,7 @@ During the round, the market produces a live price sample about every 0.5 second
 live_price = projected_path(progress) + live_noise
 ```
 
-The graph shows these live samples as they arrive. At zero seconds, the final price is resolved and the round enters debrief. After the player selects **Next Day**, the next day's projection is generated and its new 30-second live price path begins.
+The graph shows these live samples as they arrive. At zero seconds, the final price is resolved and the round enters debrief. After the player selects **Next Day**, the next brief shows the new projection before its 30-second live price path begins.
 
 The exact values should be tuned for fun, but the initial target is:
 
@@ -163,8 +163,10 @@ The main screen should be a compact trading dashboard rather than a collection o
 - **News feed:** timestamped stock headlines with forecast signals and resolved outcomes.
 - **Trade controls:** quantity input or stepper, Buy button, Sell button, and a clear validation message. Each stock row should also provide fast one-click buy and sell actions.
 - **Trading clock:** prominent countdown from 30 seconds to zero that remains visible while the player trades.
-- **Debrief:** a pause after each round showing resolved prices, changes, portfolio value, and the news items that affected the round.
-- **Next Day control:** starts the next round only when the player is ready. It is unavailable during live trading and unnecessary after the final round.
+- **Debrief:** a pause after each round showing resolved prices, changes, player result, action markers, and ranking.
+- **Brief:** a pre-round view showing next-day projections/news, current holdings, and multiplayer holdings/rankings.
+- **Next Day control:** opens the next brief. It is unavailable during live trading and unnecessary after the final round.
+- **Start Trading control:** leaves the brief and starts the live round.
 - **End-of-run summary:** starting cash, final cash, total return, best trade, and a replay button.
 
 ### Usability requirements

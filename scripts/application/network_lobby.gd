@@ -103,6 +103,9 @@ func submit_sell(symbol: String, quantity: int) -> void:
 func submit_ready_for_next_day() -> void:
 	_submit_intent.rpc_id(1, "ready_for_next_day", "", 0)
 
+func submit_ready_for_trading() -> void:
+	_submit_intent.rpc_id(1, "ready_for_trading", "", 0)
+
 func broadcast_match_state(snapshot: Dictionary) -> void:
 	if is_host:
 		_receive_match_state.rpc(snapshot)

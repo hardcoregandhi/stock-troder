@@ -132,7 +132,7 @@ GameState
   cash: int
   current_day: int
   total_days: int
-  phase: enum { PREPARING, TRADING, RESOLVING, DEBRIEF, COMPLETE }
+  phase: enum { PREPARING, BRIEF, TRADING, RESOLVING, DEBRIEF, COMPLETE }
   stocks: Array[StockData]
   stock_count: int (1..6, default 6)
   holdings: Dictionary[String, int]
@@ -227,12 +227,12 @@ Responsibilities:
 
 - Create a fresh `GameState`.
 - Initialize the stock catalog.
-- Start the first trading day.
+- Prepare the first brief and start the first trading day after player confirmation.
 - Start and monitor the 30-second timer.
 - Route buy and sell requests to `TradeService`.
 - Resolve the market when the timer expires.
 - Pause after a resolved round and wait for a Next Day command.
-- Start the next day when the player leaves the debrief.
+- Open the next brief when the player leaves the debrief, then start trading after confirmation.
 - Liquidate holdings after the final day.
 - Emit run-complete data.
 
@@ -261,6 +261,10 @@ PREPARING
     |
     | generate projections and news
     v
+BRIEF
+  |
+  | player reviews the outlook and selects Start Trading
+  v
 TRADING
     |
     | player buys/sells while timer > 0
@@ -282,11 +286,12 @@ DEBRIEF
 
 - Buy and sell requests are accepted only during `TRADING`.
 - Pump requests are accepted only during `TRADING`, once per stock per round, and only when cash covers the fixed cost.
-- Projections are generated during `PREPARING` and remain fixed during `TRADING`.
+- Projections are generated during `PREPARING`, shown in `BRIEF`, and remain fixed during `TRADING`.
 - Prices update during `TRADING` at the configured market sample interval. A market sample is not a new day.
 - The timer is stopped during `RESOLVING`.
 - The player cannot trade during `RESOLVING`, `DEBRIEF`, or `COMPLETE`.
-- The next day's projections are not generated until the player selects Next Day from the debrief.
+- The next day's projections are generated for the brief after the player selects Next Day from the debrief.
+- The trading timer starts only after the player selects Start Trading from the brief.
 - The final result is calculated only after final liquidation.
 
 ## 7. Main Data Flow
@@ -343,8 +348,14 @@ DayTimer.timeout
 ```text
 Next Day button
   -> TradingSession.continue_to_next_day()
-  -> GameState advances the day and enters PREPARING
+  -> GameState advances the day and enters BRIEF
   -> MarketSimulator generates the next projection and news
+  -> UI shows the brief
+
+Start Trading button
+  -> TradingSession.start_trading_round()
+  -> Host validates multiplayer readiness when needed
+  -> GameState enters TRADING
   -> DayTimer starts a new 30-second round
 ```
 ```
@@ -358,6 +369,7 @@ Suggested `TradingSession` signals:
 ```text
 run_started(state_snapshot)
 day_prepared(day_number, projections, news)
+brief_started(day_number, projections, news)
 time_updated(seconds_remaining)
 trade_completed(trade_result)
 trade_rejected(trade_result)
