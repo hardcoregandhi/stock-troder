@@ -53,7 +53,7 @@ That is the intended tension.
 
 ```text
 +---------------------------------------------------------------+
-| STOCKTRODER | ROUND 1/10 | TIME | CASH | PORTFOLIO | RETURN  |
+| ROUND 1/10 | TIME | CASH | PORTFOLIO | RETURN | MATCH STATUS |
 +---------------------------------------------------------------+
 |                                                               |
 |                  SHARED LIVE MARKET GRAPH                    |
@@ -65,14 +65,14 @@ That is the intended tension.
 | BRK   | £100  | ...  | ...        | ...   |  +  |  -         |
 | ...                                                        |
 +----------------------+----------------------+-----------------+
-| NEWS FEED             | SELECTED STOCK / ACTION FEEDBACK       |
-| timestamped items     | projection, position, Pump, feedback  |
+| LIVE MARKET           | NEWS FEED                              |
+| shared graph and rows | short signals and resolved headlines  |
 +---------------------------------------------------------------+
 ```
 
-The graph is the main visual surface. The rows are the action surface. The news feed is the explanation surface.
+The status bar is the top element. The graph and rows are the full main market surface and action surface. The news feed is the explanation surface.
 
-The dashboard must fit responsive 16:9 viewports. The graph stays above compact stock rows. Extra information moves to tabs or separate pages rather than scroll bars. The selected-stock panel keeps quantity trading and Pump controls, while the news feed shows the latest forecast and resolved headlines in a bounded list.
+The dashboard must fit responsive 16:9 viewports. The graph stays above compact stock rows. Extra information moves to tabs or separate pages rather than scroll bars. The right panel contains only a readable news feed and short market context. Buy, Sell, Pump, and Sabotage remain row actions.
 
 ## 4. Shared Market Graph
 
@@ -159,8 +159,7 @@ Single-player should show:
 - Every stock row.
 - The news feed.
 - The player's cash and portfolio.
-- The selected stock's expanded information.
-- Pump only for the selected stock if enabled.
+- A readable news feed and short market context.
 
 The player should not need to change screens to compare stocks.
 

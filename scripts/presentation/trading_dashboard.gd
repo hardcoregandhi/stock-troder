@@ -19,14 +19,7 @@ var cash_label: Label
 var portfolio_label: Label
 var return_label: Label
 var stock_list: GridContainer
-var detail_title: Label
-var detail_price_caption: Label
-var detail_price: Label
-var detail_projection: Label
-var detail_news: Label
-var detail_shares: Label
 var trade_feedback: Label
-var pump_status: Label
 var network_status: Label
 var chart: StockHistoryChart
 var summary_panel: PanelContainer
@@ -39,7 +32,6 @@ var debrief_chart: StockHistoryChart
 var debrief_chart_tabs: HBoxContainer
 var debrief_day_series: Array[Dictionary] = []
 var debrief_game_series: Array[Dictionary] = []
-var selected_symbol := "AUR"
 var row_labels: Dictionary = {}
 var news_feed: VBoxContainer
 var news_history: Array[Dictionary] = []
@@ -133,25 +125,13 @@ func _build_ui() -> void:
 	var page := VBoxContainer.new()
 	page.add_theme_constant_override("separation", 14)
 	margin.add_child(page)
-	page.add_child(_build_header())
 	page.add_child(_build_status_bar())
 	var body := HBoxContainer.new()
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	body.add_theme_constant_override("separation", 14)
 	page.add_child(body)
 	body.add_child(_build_market_panel())
-	body.add_child(_build_detail_panel())
-
-func _build_header() -> Control:
-	var row := HBoxContainer.new()
-	row.custom_minimum_size.y = 48
-	var spacer := Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(spacer)
-	network_status = _label("", 12, MUTED)
-	network_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	row.add_child(network_status)
-	return row
+	body.add_child(_build_news_panel())
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
@@ -163,16 +143,25 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _build_status_bar() -> Control:
 	var panel := _panel()
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 18)
+	panel.add_child(row)
 	var grid := GridContainer.new()
 	grid.columns = 5
+	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	grid.add_theme_constant_override("h_separation", 30)
 	grid.add_theme_constant_override("v_separation", 2)
-	panel.add_child(grid)
+	row.add_child(grid)
 	day_label = _status_item(grid, "DAY / ROUND", "DAY 1 / 10", TEXT)
 	clock_label = _status_item(grid, "TIME LEFT", "30.0s", ACCENT)
 	cash_label = _status_item(grid, "CASH", "£0.00", TEXT)
 	portfolio_label = _status_item(grid, "PORTFOLIO", "£0.00", TEXT)
 	return_label = _status_item(grid, "RETURN", "£0.00", POSITIVE)
+	network_status = _label("", 12, MUTED)
+	network_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	network_status.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	network_status.custom_minimum_size.x = 180
+	row.add_child(network_status)
 	return panel
 
 func _status_item(parent: Control, caption: String, value: String, color: Color) -> Label:
@@ -192,7 +181,7 @@ func _build_market_panel() -> Control:
 	content.add_theme_constant_override("separation", 8)
 	panel.add_child(content)
 	content.add_child(_label("LIVE MARKET", 13, MUTED))
-	content.add_child(_label("All configured stocks. Select a row for detail, or trade one share now.", 12, MUTED))
+	content.add_child(_label("All configured stocks. Compare the market and act from each row.", 12, MUTED))
 	chart = StockHistoryChart.new()
 	chart.custom_minimum_size.y = 155
 	chart.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -204,44 +193,22 @@ func _build_market_panel() -> Control:
 	stock_list.add_theme_constant_override("v_separation", 5)
 	_build_stock_header()
 	content.add_child(stock_list)
+	trade_feedback = _label("Select a row to trade one share.", 12, MUTED)
+	trade_feedback.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	content.add_child(trade_feedback)
 	return panel
 
-func _build_detail_panel() -> Control:
+func _build_news_panel() -> Control:
 	var panel := _panel()
 	panel.custom_minimum_size.x = 360
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var content := VBoxContainer.new()
 	content.add_theme_constant_override("separation", 10)
 	panel.add_child(content)
-	detail_title = _label("AUR  Aurora Robotics", 22, TEXT)
-	detail_title.custom_minimum_size.x = 300
-	content.add_child(detail_title)
-	detail_price_caption = _label("LIVE PRICE", 11, MUTED)
-	content.add_child(detail_price_caption)
-	detail_price = _label("£0.00", 30, TEXT)
-	content.add_child(detail_price)
-	detail_projection = _label("ESTIMATE  --", 14, ACCENT)
-	detail_projection.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	detail_projection.custom_minimum_size = Vector2(300, 34)
-	content.add_child(detail_projection)
-	detail_news = _label("NEWS  --", 13, MUTED)
-	detail_news.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	detail_news.custom_minimum_size = Vector2(300, 42)
-	content.add_child(detail_news)
-	detail_shares = _label("Shares held: 0", 13, TEXT)
-	content.add_child(detail_shares)
-	var trade_row := HBoxContainer.new()
-	trade_feedback = _label("Select a row to trade one share.", 12, MUTED)
-	trade_feedback.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	trade_feedback.custom_minimum_size.x = 300
-	content.add_child(trade_feedback)
-	pump_status = _label("PUMP COST £25.00 | Once per stock per round", 12, MUTED)
-	pump_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	pump_status.custom_minimum_size = Vector2(300, 38)
-	content.add_child(pump_status)
 	content.add_child(_label("NEWS FEED", 12, MUTED))
+	content.add_child(_label("Short signals and resolved market context.", 12, MUTED))
 	news_feed = VBoxContainer.new()
-	news_feed.custom_minimum_size.x = 300
+	news_feed.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	news_feed.add_theme_constant_override("separation", 5)
 	content.add_child(news_feed)
 	return panel
@@ -375,16 +342,13 @@ func _refresh() -> void:
 		_build_stock_rows(state)
 	else:
 		_update_stock_rows(state)
-	_update_detail(state)
+	_update_market_surface(state)
 
 func _build_stock_rows(state: GameState) -> void:
 	for stock in state.stocks:
-		var select := Button.new()
-		select.text = stock.symbol
-		select.add_theme_color_override("font_color", StockData.color_for_index(state.stocks.find(stock)))
-		select.custom_minimum_size.x = 50
-		select.pressed.connect(_select_stock.bind(stock.symbol))
-		stock_list.add_child(select)
+		var symbol := _label(stock.symbol, 12, StockData.color_for_index(state.stocks.find(stock)))
+		symbol.custom_minimum_size.x = 50
+		stock_list.add_child(symbol)
 		var company := _label(stock.company_name, 12, TEXT)
 		company.add_theme_color_override("font_color", StockData.color_for_index(state.stocks.find(stock)))
 		company.custom_minimum_size.x = 110
@@ -454,27 +418,7 @@ func _update_stock_rows(state: GameState) -> void:
 		labels["pump"].tooltip_text = "ACTIVE: +4.0% live path; correction risk remains." if pump_active else "Spend £25.00 to lift this stock's live path."
 		labels["pump"].disabled = session.network_mode or not can_trade or pump_active or state.cash_pence < GameState.PUMP_COST_PENCE
 
-func _update_detail(state: GameState) -> void:
-	var stock := state.get_stock(selected_symbol)
-	if stock == null:
-		return
-	detail_title.text = "%s  %s" % [stock.symbol, stock.company_name]
-	detail_price.text = _format_pence(stock.current_price_pence)
-	detail_projection.text = "ESTIMATE  %+.1f%%  |  END RANGE %+.1f%% to %+.1f%%  |  %s" % [stock.projection_change * 100.0, stock.projection_low * 100.0, stock.projection_high * 100.0, stock.projection_confidence]
-	detail_projection.add_theme_color_override("font_color", POSITIVE if stock.projection_change >= 0 else NEGATIVE)
-	detail_news.text = "FORECAST NEWS  %s" % stock.current_news
-	detail_shares.text = "Shares held: %d" % int(state.holdings[stock.symbol])
-	if pump_status != null:
-		if session.network_mode:
-			pump_status.text = "PUMP unavailable in multiplayer"
-		elif state.phase != GameState.Phase.TRADING:
-			pump_status.text = "PUMP UNAVAILABLE outside the trading phase"
-		elif state.has_pumped(stock.symbol) and stock.pump_active:
-			pump_status.text = "PUMP ACTIVE: +%.1f%% LIVE PATH | £25.00 SPENT | correction risk at resolution" % (stock.pump_live_boost * 100.0)
-		elif state.cash_pence < GameState.PUMP_COST_PENCE:
-			pump_status.text = "PUMP UNAVAILABLE | Need £25.00 cash"
-		else:
-			pump_status.text = "PUMP COST £25.00 | Once per stock per round"
+func _update_market_surface(state: GameState) -> void:
 	var chart_series: Array[Dictionary] = []
 	for index in state.stocks.size():
 		var chart_stock: StockData = state.stocks[index]
@@ -526,20 +470,13 @@ func _update_news_feed(state: GameState) -> void:
 		item.custom_minimum_size.x = 300
 		news_feed.add_child(item)
 
-func _select_stock(symbol: String) -> void:
-	selected_symbol = symbol
-	_refresh()
-
 func _quick_buy(symbol: String) -> void:
-	selected_symbol = symbol
 	session.buy(symbol, 1)
 
 func _quick_sell(symbol: String) -> void:
-	selected_symbol = symbol
 	session.sell(symbol, 1)
 
 func _quick_pump(symbol: String) -> void:
-	selected_symbol = symbol
 	session.pump(symbol)
 
 func _open_pause_menu() -> void:
@@ -871,7 +808,6 @@ func _restart_run() -> void:
 		child.free()
 	for child in news_feed.get_children():
 		child.free()
-	selected_symbol = "AUR"
 	session.start_run()
 
 func _build_debrief_chart() -> Control:
