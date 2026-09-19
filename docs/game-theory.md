@@ -59,7 +59,7 @@ The game should avoid making the forecast perfectly accurate. If the forecast al
 
 Two players can see the same expected return and choose different actions.
 
-- A risk-seeking player may buy Nova Biotech before a large possible movement.
+- A risk-seeking player may buy Frontier Biotech before a large possible movement.
 - A risk-averse player may hold Harbor Foods and preserve cash.
 - A cautious player may sell early when a small profit is available.
 

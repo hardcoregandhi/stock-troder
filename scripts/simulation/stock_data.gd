@@ -61,11 +61,11 @@ static func create_default_catalog(stock_count: int = 6) -> Array[StockData]:
 			{"text": "Subscription growth beats expectations", "impact": 0.022},
 			{"text": "A major client delays renewal", "impact": -0.020},
 		]),
-		StockData.new("HBR", "Evergreen Foods", "Defensive, slower-moving stock", 75_000, 0.022, 0.003, [
+		StockData.new("EGF", "Evergreen Foods", "Defensive, slower-moving stock", 75_000, 0.022, 0.003, [
 			{"text": "Staple food demand stays resilient", "impact": 0.010},
 			{"text": "Input prices pressure margins", "impact": -0.012},
 		]),
-		StockData.new("NOV", "Frontier Biotech", "High-risk binary events", 100_000, 0.120, 0.0, [
+		StockData.new("FRB", "Frontier Biotech", "High-risk binary events", 100_000, 0.120, 0.0, [
 			{"text": "Clinical trial results look promising", "impact": 0.095},
 			{"text": "Clinical trial results disappoint", "impact": -0.110},
 		]),

@@ -21,6 +21,25 @@ func test_prepare_and_live_samples_use_trading_contract() -> void:
 	for stock in state.stocks:
 		assert_true(stock.current_price_pence >= MARKET_SIMULATOR.PRICE_FLOOR_PENCE)
 
+func test_live_noise_is_bounded_and_more_visible_during_round() -> void:
+	var state = GAME_STATE.new(2026, 2)
+	var simulator = MARKET_SIMULATOR.new(2026)
+	simulator.prepare_day(state)
+	var opening_prices: Dictionary = {}
+	for stock in state.stocks:
+		opening_prices[stock.symbol] = stock.round_open_price_pence
+	simulator.update_live_prices(state, 0.5)
+	for stock in state.stocks:
+		var projected_path := lerpf(float(stock.round_open_price_pence), float(stock.projected_price_pence), 0.5)
+		var relative_noise := absf(float(stock.current_price_pence) / projected_path - 1.0)
+		assert_true(relative_noise <= MARKET_SIMULATOR.MAX_LIVE_NOISE + 0.001)
+	simulator.update_live_prices(state, 1.0)
+	var changed_stock_count := 0
+	for stock in state.stocks:
+		if stock.current_price_pence != int(opening_prices[stock.symbol]):
+			changed_stock_count += 1
+	assert_gt(changed_stock_count, 0)
+
 func test_resolved_prices_respect_price_floor_and_append_history() -> void:
 	var state = GAME_STATE.new(77, 1)
 	var simulator = MARKET_SIMULATOR.new(77)
@@ -106,6 +125,20 @@ func test_pumped_resolution_is_seeded_and_reports_correction() -> void:
 	var aur_resolution: Dictionary = first_resolutions[0]
 	assert_true(aur_resolution.has("pump_correction"))
 	assert_true(aur_resolution["pump_used"])
+
+func test_pump_changes_resolution_path_under_same_seed() -> void:
+	var normal_state = GAME_STATE.new(717, 2)
+	var pumped_state = GAME_STATE.new(717, 2)
+	var normal_simulator = MARKET_SIMULATOR.new(717)
+	var pumped_simulator = MARKET_SIMULATOR.new(717)
+	normal_simulator.prepare_day(normal_state)
+	pumped_simulator.prepare_day(pumped_state)
+	assert_true(TRADE_SERVICE.new().pump(pumped_state, "AUR")["success"])
+	var normal_resolution := normal_simulator.resolve_day(normal_state)[0]
+	var pumped_resolution := pumped_simulator.resolve_day(pumped_state)[0]
+	assert_true(pumped_resolution["pump_used"])
+	assert_gt(float(pumped_resolution["pump_correction_percent"]), 0.0)
+	assert_ne(pumped_resolution["closing_price_pence"], normal_resolution["closing_price_pence"])
 
 func _prices(state) -> Array[int]:
 	var prices: Array[int] = []

@@ -20,7 +20,7 @@ func test_new_state_has_starting_cash_and_catalog() -> void:
 func test_default_catalog_uses_large_opening_price_scale() -> void:
 	var state: GameState = GameState.create_default(123, 3)
 	var expected_prices := [5_000, 10_000, 25_000, 50_000, 75_000, 100_000]
-	var expected_symbols := ["AUR", "BRK", "CYN", "DSK", "HBR", "NOV"]
+	var expected_symbols := ["AUR", "BRK", "CYN", "DSK", "EGF", "FRB"]
 	for index in state.stocks.size():
 		assert_eq(state.stocks[index].symbol, expected_symbols[index])
 		assert_eq(state.stocks[index].current_price_pence, expected_prices[index])
@@ -29,8 +29,8 @@ func test_default_catalog_uses_e_and_f_names_for_fifth_and_sixth_stocks() -> voi
 	var state: GameState = GAME_STATE.create_default(123, 3)
 	assert_true(state.stocks[4].company_name.begins_with("E"))
 	assert_true(state.stocks[5].company_name.begins_with("F"))
-	assert_eq(state.stocks[4].symbol, "HBR")
-	assert_eq(state.stocks[5].symbol, "NOV")
+	assert_eq(state.stocks[4].symbol, "EGF")
+	assert_eq(state.stocks[5].symbol, "FRB")
 
 func test_stock_count_preserves_default_order_and_bounds() -> void:
 	var short_state: GameState = GAME_STATE.create_default(123, 3, 3)

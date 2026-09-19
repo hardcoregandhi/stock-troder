@@ -65,6 +65,10 @@ func test_final_day_liquidates_holdings_and_emits_summary() -> void:
 	assert_eq(last_summary["final_cash_pence"], session.game_state.cash_pence)
 	assert_eq(last_summary["profit_loss_pence"], session.game_state.total_return_pence())
 	assert_eq(last_summary["days_completed"], 1)
+	assert_true(last_summary.has("holdings"))
+	assert_true(last_summary.has("ranking"))
+	assert_eq(last_summary["holdings"]["AUR"], 0)
+	assert_eq(last_summary["ranking"][0]["return_pence"], last_summary["profit_loss_pence"])
 
 func test_non_final_resolution_contains_debrief_data() -> void:
 	var session: TradingSession = _new_session()
@@ -78,6 +82,20 @@ func test_non_final_resolution_contains_debrief_data() -> void:
 		assert_true(resolution.has("closing_price_pence"))
 		assert_true(resolution.has("percentage_change"))
 		assert_true(resolution.has("news"))
+	assert_eq(session.completed_rounds.size(), 1)
+	assert_true(session.completed_rounds[0].has("stocks"))
+	assert_true(session.completed_rounds[0].has("pump_markers"))
+	assert_true(session.completed_rounds[0].has("sabotage_markers"))
+
+func test_restart_starts_a_fresh_run_and_clears_history() -> void:
+	var session: TradingSession = _new_session()
+	session.start_run(17, 2)
+	session._on_day_timer_timed_out()
+	assert_eq(session.completed_rounds.size(), 1)
+	session.start_run(18, 2)
+	assert_eq(session.completed_rounds.size(), 0)
+	assert_eq(session.game_state.current_day, 1)
+	assert_eq(session.game_state.phase, GAME_STATE.Phase.TRADING)
 
 func test_next_day_resets_pump_usage() -> void:
 	var session: TradingSession = _new_session()

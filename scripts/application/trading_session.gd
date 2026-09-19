@@ -28,6 +28,8 @@ var network_is_host := false
 var network_local_player_id := 1
 var network_player_states: Dictionary = {}
 var network_ready_players: Dictionary = {}
+var network_rankings: Array[Dictionary] = []
+var completed_rounds: Array[Dictionary] = []
 
 func _ready() -> void:
 	day_timer = DayTimer.new()
@@ -44,6 +46,7 @@ func start_run(run_seed: int = DEFAULT_SEED, run_total_days: int = GameState.DEF
 	market_simulator = MarketSimulator.new(run_seed)
 	trade_service = TradeService.new()
 	market_sample_elapsed = 0.0
+	completed_rounds.clear()
 	run_started.emit(state_snapshot())
 	_prepare_day()
 
@@ -54,6 +57,7 @@ func start_network_host(lobby: NetworkLobby, player_ids: Array[int], run_seed: i
 	network_local_player_id = 1
 	network_player_states.clear()
 	network_ready_players.clear()
+	network_rankings.clear()
 	start_run(run_seed, GameState.DEFAULT_TOTAL_DAYS, GameState.DEFAULT_STOCK_COUNT)
 	for player_id in player_ids:
 		var player_state: GameState = game_state if player_id == network_local_player_id else GameState.create_default(run_seed, game_state.total_days)
@@ -168,6 +172,8 @@ func state_snapshot() -> Dictionary:
 		"portfolio_value_pence": game_state.portfolio_value_pence(),
 		"return_pence": game_state.total_return_pence(),
 		"stocks": stock_records,
+		"completed_rounds": completed_rounds.duplicate(true),
+		"rankings": network_rankings.duplicate(true),
 	}
 
 func apply_network_snapshot(snapshot: Dictionary) -> void:
@@ -178,6 +184,7 @@ func apply_network_snapshot(snapshot: Dictionary) -> void:
 	game_state.current_day = int(market.get("day", game_state.current_day))
 	game_state.total_days = int(market.get("total_days", game_state.total_days))
 	game_state.phase = GameState.Phase.get(str(market.get("phase", "TRADING")), GameState.Phase.TRADING)
+	completed_rounds = market.get("completed_rounds", []).duplicate(true)
 	game_state.cash_pence = int(portfolio.get("cash_pence", game_state.cash_pence))
 	for symbol in game_state.holdings:
 		game_state.holdings[symbol] = int(portfolio.get("holdings", {}).get(symbol, 0))
@@ -193,6 +200,9 @@ func apply_network_snapshot(snapshot: Dictionary) -> void:
 		stock.projected_price_pence = int(record.get("projected_price_pence", stock.current_price_pence))
 		stock.projection_direction = int(record.get("projection_direction", 0))
 		stock.projection_confidence = str(record.get("projection_confidence", ""))
+	network_rankings.clear()
+	for player in snapshot.get("players", []):
+		network_rankings.append(player.duplicate(true))
 	market_updated.emit(state_snapshot())
 
 func apply_network_event(event: Dictionary) -> void:
@@ -201,6 +211,8 @@ func apply_network_event(event: Dictionary) -> void:
 			_execute_trade(event["result"])
 		"day_resolved":
 			day_resolved.emit(int(event["day"]), event["resolutions"], state_snapshot())
+		"run_completed":
+			run_completed.emit(event["summary"])
 		"time":
 			time_updated.emit(float(event["seconds_remaining"]))
 		"status":
@@ -220,7 +232,7 @@ func _network_market_snapshot() -> Dictionary:
 			"projection_direction": stock.projection_direction,
 			"projection_confidence": stock.projection_confidence,
 		})
-	return {"day": game_state.current_day, "total_days": game_state.total_days, "phase": GameState.Phase.keys()[game_state.phase], "stocks": records}
+	return {"day": game_state.current_day, "total_days": game_state.total_days, "phase": GameState.Phase.keys()[game_state.phase], "stocks": records, "completed_rounds": completed_rounds.duplicate(true)}
 
 func _network_portfolio_snapshot(player_id: int) -> Dictionary:
 	var state: GameState = network_player_states[player_id]
@@ -230,7 +242,8 @@ func _publish_network_state() -> void:
 	if network_lobby == null or not network_is_host:
 		return
 	for player_id in network_player_states:
-		var packet := {"market": _network_market_snapshot(), "portfolio": _network_portfolio_snapshot(player_id)}
+		network_rankings = _network_rankings()
+		var packet := {"market": _network_market_snapshot(), "portfolio": _network_portfolio_snapshot(player_id), "players": network_rankings.duplicate(true)}
 		if player_id == network_local_player_id:
 			apply_network_snapshot(packet)
 		else:
@@ -294,6 +307,7 @@ func _on_day_timer_timed_out() -> void:
 	var resolved_day := game_state.current_day
 	var resolutions := market_simulator.resolve_day(game_state)
 	var is_final_day := game_state.phase == GameState.Phase.COMPLETE
+	completed_rounds.append(_round_record(resolved_day, resolutions))
 	if is_final_day:
 		trade_service.liquidate_all(game_state)
 	if network_mode and network_is_host:
@@ -309,6 +323,10 @@ func _on_day_timer_timed_out() -> void:
 				network_lobby.send_match_event({"type": "day_resolved", "day": resolved_day, "resolutions": resolutions}, player_id)
 	if is_final_day:
 		_emit_run_completed()
+		if network_mode and network_is_host:
+			for player_id in network_player_states:
+				if player_id != network_local_player_id:
+					network_lobby.send_match_event({"type": "run_completed", "summary": _run_summary_for(network_player_states[player_id])}, player_id)
 		return
 
 func _on_time_updated(seconds_remaining: float) -> void:
@@ -322,9 +340,53 @@ func _execute_trade(trade_result: Dictionary) -> Dictionary:
 	return trade_result
 
 func _emit_run_completed() -> void:
-	run_completed.emit({
-		"starting_cash_pence": game_state.starting_cash_pence,
-		"final_cash_pence": game_state.cash_pence,
-		"profit_loss_pence": game_state.cash_pence - game_state.starting_cash_pence,
-		"days_completed": game_state.total_days,
-	})
+	run_completed.emit(_run_summary_for(game_state))
+
+func _run_summary_for(state: GameState) -> Dictionary:
+	return {
+		"starting_cash_pence": state.starting_cash_pence,
+		"final_cash_pence": state.cash_pence,
+		"profit_loss_pence": state.cash_pence - state.starting_cash_pence,
+		"days_completed": state.total_days,
+		"holdings": state.holdings.duplicate(),
+		"ranking": _network_rankings(),
+		"completed_rounds": completed_rounds.duplicate(true),
+	}
+
+func _round_record(day: int, resolutions: Array[Dictionary]) -> Dictionary:
+	var records: Array[Dictionary] = []
+	for stock in game_state.stocks:
+		records.append({
+			"symbol": stock.symbol,
+			"opening_price_pence": stock.round_open_price_pence,
+			"closing_price_pence": stock.current_price_pence,
+			"percentage_change": _percentage_change(stock.round_open_price_pence, stock.current_price_pence),
+			"game_so_far_percentage": _percentage_change(stock.price_history_pence[0], stock.current_price_pence),
+		})
+	return {
+		"day": day,
+		"resolutions": resolutions.duplicate(true),
+		"stocks": records,
+		"pump_markers": resolutions.filter(func(item: Dictionary) -> bool: return bool(item.get("pump_used", false))),
+		"sabotage_markers": [],
+	}
+
+func _percentage_change(opening_price_pence: int, closing_price_pence: int) -> float:
+	if opening_price_pence <= 0:
+		return 0.0
+	return float(closing_price_pence - opening_price_pence) / float(opening_price_pence)
+
+func _network_rankings() -> Array[Dictionary]:
+	var rankings: Array[Dictionary] = []
+	var states := network_player_states if network_mode and network_is_host else {network_local_player_id: game_state}
+	for player_id in states:
+		var player_state: GameState = states[player_id]
+		rankings.append({
+			"player_id": int(player_id),
+			"cash_pence": player_state.cash_pence,
+			"portfolio_value_pence": player_state.portfolio_value_pence(),
+			"return_pence": player_state.total_return_pence(),
+			"holdings": player_state.holdings.duplicate(),
+		})
+	rankings.sort_custom(func(left: Dictionary, right: Dictionary) -> bool: return int(left["return_pence"]) > int(right["return_pence"]))
+	return rankings

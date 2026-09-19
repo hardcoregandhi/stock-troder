@@ -4,6 +4,8 @@ extends RefCounted
 const PRICE_FLOOR_PENCE: int = 100
 const PUMP_CORRECTION_CHANCE: float = 0.65
 const PUMP_CORRECTION_PERCENT: float = 0.08
+const LIVE_NOISE_VOLATILITY_FACTOR: float = 0.35
+const MAX_LIVE_NOISE: float = 0.04
 
 var random: RandomNumberGenerator = RandomNumberGenerator.new()
 var seed: int
@@ -40,7 +42,8 @@ func update_live_prices(state: GameState, progress: float) -> Array[Dictionary]:
 		if stock.pump_active:
 			target_price = maxi(PRICE_FLOOR_PENCE, roundi(float(target_price) * (1.0 + stock.pump_live_boost)))
 		var path_price := lerpf(float(stock.round_open_price_pence), float(target_price), clamped_progress)
-		var live_noise := random.randf_range(-stock.volatility * 0.10, stock.volatility * 0.10)
+		var live_noise_limit := minf(stock.volatility * LIVE_NOISE_VOLATILITY_FACTOR, MAX_LIVE_NOISE)
+		var live_noise := random.randf_range(-live_noise_limit, live_noise_limit)
 		var live_price := maxi(PRICE_FLOOR_PENCE, roundi(path_price * (1.0 + live_noise)))
 		stock.set_live_price(live_price)
 		updates.append({

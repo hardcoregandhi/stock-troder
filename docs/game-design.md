@@ -73,8 +73,8 @@ Suggested initial stocks:
 | BRK | Brickline Retail | Stable consumer stock |
 | CYN | Cyanic Energy | News-sensitive energy stock |
 | DSK | Deskbound Software | Moderate technology stock |
-| HBR | Evergreen Foods | Defensive, slower-moving stock |
-| NOV | Frontier Biotech | High-risk binary events |
+| EGF | Evergreen Foods | Defensive, slower-moving stock |
+| FRB | Frontier Biotech | High-risk binary events |
 
 The default catalog has six stocks. A local run may use a smaller catalog for testing or future match setup, from one to six stocks, while preserving this order and the same seeded behavior. Symbols remain stable.
 

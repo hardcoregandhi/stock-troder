@@ -35,8 +35,8 @@ Suggested opening prices:
 | BRK | £100 | Stable retail |
 | CYN | £250 | News-sensitive energy |
 | DSK | £500 | Moderate software |
-| HBR | £750 | Defensive food |
-| NOV | £1,000 | High-risk biotech |
+| EGF | £750 | Defensive food |
+| FRB | £1,000 | High-risk biotech |
 
 These prices are a first scale, not final balance values. The economy harness should test whether they create useful concentration and diversification choices.
 

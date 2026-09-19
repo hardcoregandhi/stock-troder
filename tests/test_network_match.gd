@@ -56,3 +56,22 @@ func test_unknown_peer_intent_cannot_change_host_state() -> void:
 	session.trade_service = TradeService.new()
 	session.receive_network_intent(99, "buy", "AUR", 1)
 	assert_eq(session.game_state.holdings["AUR"], 0)
+
+func test_host_ranking_uses_authoritative_portfolio_values() -> void:
+	var session: TradingSession = TRADING_SESSION.new()
+	track(session)
+	session._ready()
+	session.network_mode = true
+	session.network_is_host = true
+	session.game_state = GAME_STATE.new(42, 1)
+	session.game_state.phase = GAME_STATE.Phase.COMPLETE
+	var remote_state: GameState = GAME_STATE.new(42, 1)
+	remote_state.stocks = session.game_state.stocks
+	remote_state.phase = GAME_STATE.Phase.COMPLETE
+	remote_state.cash_pence = 120_000
+	session.network_player_states = {1: session.game_state, 2: remote_state}
+	var rankings := session._network_rankings()
+	assert_eq(rankings.size(), 2)
+	assert_eq(rankings[0]["player_id"], 2)
+	assert_eq(rankings[0]["cash_pence"], 120_000)
+	assert_eq(rankings[0]["return_pence"], 20_000)
