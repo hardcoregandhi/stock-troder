@@ -107,7 +107,6 @@ func _show_lobby() -> void:
 	start_match_button = _button("START MATCH", _on_start_match)
 	start_match_button.disabled = true
 	content.add_child(start_match_button)
-	content.add_child(_label("Match networking is not connected to the market yet.", 12, MUTED))
 	content.add_child(_spacer(12))
 	content.add_child(_button("BACK", _on_lobby_back))
 	_on_network_status_changed(network_lobby.connection_state)

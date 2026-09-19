@@ -14,6 +14,10 @@ func _ready() -> void:
 	network_lobby = NETWORK_LOBBY.new()
 	network_lobby.name = "NetworkLobby"
 	add_child(network_lobby)
+	network_lobby.match_started.connect(_on_network_match_started)
+	network_lobby.match_state_received.connect(_on_network_state_received)
+	network_lobby.match_event_received.connect(_on_network_event_received)
+	network_lobby.match_ended.connect(_on_network_match_ended)
 	_show_main_menu()
 
 func _show_main_menu() -> void:
@@ -43,3 +47,38 @@ func _start_single_player() -> void:
 	add_child(dashboard)
 	dashboard.setup(session)
 	session.start_run()
+
+func _on_network_match_started(player_ids: Array[int], host: bool) -> void:
+	if menu != null:
+		menu.queue_free()
+		menu = null
+	session = TRADING_SESSION.new()
+	session.name = "TradingSession"
+	add_child(session)
+	dashboard = TRADING_DASHBOARD.new()
+	dashboard.name = "TradingDashboard"
+	dashboard.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(dashboard)
+	dashboard.setup(session)
+	if host:
+		session.start_network_host(network_lobby, player_ids)
+	else:
+		session.start_network_client(network_lobby, multiplayer.get_unique_id())
+	session.network_status_changed.emit("Multiplayer match connected.")
+
+func _on_network_state_received(snapshot: Dictionary) -> void:
+	if session != null and session.network_mode and not session.network_is_host:
+		session.apply_network_snapshot(snapshot)
+
+func _on_network_event_received(event: Dictionary) -> void:
+	if session == null or not session.network_mode:
+		return
+	if event.get("type", "") == "player_disconnected" and session.network_is_host:
+		session.remove_network_player(int(event["player_id"]))
+	else:
+		session.apply_network_event(event)
+
+func _on_network_match_ended(reason: String) -> void:
+	if session != null:
+		network_lobby.disconnect_lobby()
+	_show_main_menu()

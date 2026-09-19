@@ -27,6 +27,7 @@ var trade_feedback: Label
 var quantity: SpinBox
 var pump_button: Button
 var pump_status: Label
+var network_status: Label
 var chart: StockHistoryChart
 var summary_panel: PanelContainer
 var summary_layer: Control
@@ -91,6 +92,7 @@ func setup(new_session: TradingSession) -> void:
 	session.pump_completed.connect(_on_trade_result)
 	session.pump_rejected.connect(_on_trade_result)
 	session.run_completed.connect(_on_run_completed)
+	session.network_status_changed.connect(_on_network_status_changed)
 
 func _build_ui() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -130,6 +132,10 @@ func _build_header() -> Control:
 	row.add_child(spacer)
 	day_label = _label("DAY 1 / 10", 18, TEXT)
 	row.add_child(day_label)
+	network_status = _label("", 12, MUTED)
+	network_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	network_status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(network_status)
 	return row
 
 func _build_status_bar() -> Control:
@@ -295,6 +301,10 @@ func _on_trade_result(result: Dictionary) -> void:
 	trade_feedback.add_theme_color_override("font_color", POSITIVE if result["success"] else NEGATIVE)
 	_refresh()
 
+func _on_network_status_changed(message: String) -> void:
+	if network_status != null:
+		network_status.text = message
+
 func _refresh() -> void:
 	if session == null or session.game_state == null:
 		return
@@ -375,9 +385,11 @@ func _update_detail(state: GameState) -> void:
 	detail_news.text = "FORECAST NEWS  %s" % stock.current_news
 	detail_shares.text = "Shares held: %d" % int(state.holdings[stock.symbol])
 	if pump_button != null:
-		pump_button.disabled = state.phase != GameState.Phase.TRADING or state.has_pumped(stock.symbol) or state.cash_pence < GameState.PUMP_COST_PENCE
+		pump_button.disabled = session.network_mode or state.phase != GameState.Phase.TRADING or state.has_pumped(stock.symbol) or state.cash_pence < GameState.PUMP_COST_PENCE
 	if pump_status != null:
-		if state.phase != GameState.Phase.TRADING:
+		if session.network_mode:
+			pump_status.text = "PUMP unavailable in multiplayer"
+		elif state.phase != GameState.Phase.TRADING:
 			pump_status.text = "PUMP UNAVAILABLE outside the trading phase"
 		elif state.has_pumped(stock.symbol):
 			pump_status.text = "PUMP USED for %s this round" % stock.symbol

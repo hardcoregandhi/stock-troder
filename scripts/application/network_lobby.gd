@@ -7,12 +7,18 @@ const MAX_PLAYERS := 6
 signal status_changed(status: String)
 signal players_changed(players: Array[Dictionary])
 signal match_start_status(message: String)
+signal match_started(player_ids: Array[int], host: bool)
+signal intent_received(peer_id: int, action: String, symbol: String, quantity: int)
+signal match_state_received(snapshot: Dictionary)
+signal match_event_received(event: Dictionary)
+signal match_ended(reason: String)
 
 var is_host := false
 var connection_state := "Disconnected"
 var local_ready := false
 var players: Dictionary[int, Dictionary] = {}
 var _peer: ENetMultiplayerPeer
+var match_active := false
 
 func _ready() -> void:
 	multiplayer.peer_connected.connect(_on_peer_connected)
@@ -71,14 +77,47 @@ func request_start_match() -> void:
 	if not is_host:
 		match_start_status.emit("Only the host can start the match.")
 		return
-	if not is_lobby_connected():
-		match_start_status.emit("Connect at least one lobby before starting.")
+	if not is_lobby_connected() or players.is_empty():
+		match_start_status.emit("Connect at least one player before starting.")
 		return
 	for player in players.values():
 		if not player["ready"]:
 			match_start_status.emit("Every player must be ready before the host starts.")
 			return
-	match_start_status.emit("Network match wiring next: lobby is ready, but the market is not connected yet.")
+	match_active = true
+	_match_started.rpc(player_ids())
+
+func player_ids() -> Array[int]:
+	var ids: Array[int] = []
+	for player in players.values():
+		ids.append(int(player["id"]))
+	ids.sort()
+	return ids
+
+func submit_buy(symbol: String, quantity: int) -> void:
+	_submit_intent.rpc_id(1, "buy", symbol, quantity)
+
+func submit_sell(symbol: String, quantity: int) -> void:
+	_submit_intent.rpc_id(1, "sell", symbol, quantity)
+
+func submit_ready_for_next_day() -> void:
+	_submit_intent.rpc_id(1, "ready_for_next_day", "", 0)
+
+func broadcast_match_state(snapshot: Dictionary) -> void:
+	if is_host:
+		_receive_match_state.rpc(snapshot)
+
+func send_match_state(snapshot: Dictionary, peer_id: int) -> void:
+	if is_host:
+		_receive_match_state.rpc_id(peer_id, snapshot)
+
+func send_match_event(event: Dictionary, peer_id: int = 0) -> void:
+	if not is_host:
+		return
+	if peer_id == 0:
+		_receive_match_event.rpc(event)
+	else:
+		_receive_match_event.rpc_id(peer_id, event)
 
 func disconnect_lobby() -> void:
 	_disconnect(true)
@@ -100,6 +139,25 @@ func _submit_ready(ready: bool) -> void:
 	var peer_id := multiplayer.get_remote_sender_id()
 	players[peer_id] = {"id": peer_id, "name": "Player %d" % peer_id, "ready": ready}
 	_broadcast_players()
+
+@rpc("any_peer", "reliable")
+func _submit_intent(action: String, symbol: String, quantity: int) -> void:
+	if not is_host or not match_active or not multiplayer.is_server():
+		return
+	intent_received.emit(multiplayer.get_remote_sender_id(), action, symbol, quantity)
+
+@rpc("authority", "reliable", "call_local")
+func _match_started(network_players: Array[int]) -> void:
+	match_active = true
+	match_started.emit(network_players, is_host)
+
+@rpc("authority", "reliable")
+func _receive_match_state(snapshot: Dictionary) -> void:
+	match_state_received.emit(snapshot)
+
+@rpc("authority", "reliable")
+func _receive_match_event(event: Dictionary) -> void:
+	match_event_received.emit(event)
 
 @rpc("authority", "reliable", "call_local")
 func _receive_players(network_players: Array[Dictionary]) -> void:
@@ -124,6 +182,8 @@ func _on_peer_connected(peer_id: int) -> void:
 func _on_peer_disconnected(peer_id: int) -> void:
 	players.erase(peer_id)
 	if is_host:
+		if match_active:
+			match_event_received.emit({"type": "player_disconnected", "player_id": peer_id})
 		_broadcast_players()
 	else:
 		players_changed.emit(player_list())
@@ -133,6 +193,8 @@ func _on_connection_failed() -> void:
 	_set_status("Connection failed")
 
 func _on_server_disconnected() -> void:
+	match_active = false
+	match_ended.emit("Host disconnected")
 	_disconnect(false)
 	_set_status("Server disconnected")
 
@@ -146,6 +208,7 @@ func _set_status(status: String) -> void:
 	status_changed.emit(status)
 
 func _disconnect(clear_status: bool) -> void:
+	match_active = false
 	if multiplayer.multiplayer_peer != null:
 		multiplayer.multiplayer_peer.close()
 	multiplayer.multiplayer_peer = null
