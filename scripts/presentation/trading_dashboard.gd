@@ -101,6 +101,7 @@ class StockHistoryChart extends Control:
 
 func setup(new_session: TradingSession) -> void:
 	session = new_session
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	_build_ui()
 	session.run_started.connect(_on_state_changed)
 	session.day_prepared.connect(_on_day_prepared)
@@ -147,16 +148,18 @@ func _build_header() -> Control:
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(spacer)
-	var menu_button := Button.new()
-	menu_button.text = "MENU"
-	menu_button.tooltip_text = "Open the pause menu"
-	menu_button.custom_minimum_size = Vector2(90, 36)
-	menu_button.pressed.connect(_open_pause_menu)
-	row.add_child(menu_button)
 	network_status = _label("", 12, MUTED)
 	network_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	row.add_child(network_status)
 	return row
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
+		if pause_layer == null:
+			_open_pause_menu()
+		else:
+			_close_pause_menu()
+		get_viewport().set_input_as_handled()
 
 func _build_status_bar() -> Control:
 	var panel := _panel()
