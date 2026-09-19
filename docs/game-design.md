@@ -11,7 +11,7 @@ The appeal comes from making decisions under incomplete information:
 - The player chooses when to hold, buy, or sell.
 - A short day limit forces the player to act instead of waiting forever.
 
-The first playable version should make the buy/sell/beat-the-clock loop enjoyable before adding sabotage or networking. Phase 1.5 adds one limited Pump action without adding multiplayer or sabotage.
+The first playable version should make the buy/sell/beat-the-clock loop enjoyable before adding multiplayer. The single-player manipulation milestone adds Pump, Sabotage, and Fake News before those mechanics are considered for multiplayer.
 
 ## 2. Product Goals
 
@@ -26,9 +26,9 @@ The first playable version should make the buy/sell/beat-the-clock loop enjoyabl
 - Calculate portfolio value and final profit/loss.
 - Provide a clear end-of-run result and a way to start again.
 
-### Phase 1.5 goal
+### Single-player manipulation milestone
 
-- Add a risky Pump action for one selected stock during a live trading round.
+- Add Pump, Sabotage, and Fake News as risky single-player actions.
 
 ### Later goals
 
@@ -154,7 +154,7 @@ Plant Fake News is a single-player action available only during `TRADING`. It ta
 
 The player can see the cost, availability, and correction risk in the dashboard. Pump usage resets when the player selects **Next Day**. The debrief reports whether a Pump correction affected the resolved result.
 
-Sabotage and Fake News usage also reset when the player selects **Next Day**. The debrief reports sabotage correction status and whether Fake News worked, failed, or backfired. These actions are not multiplayer mechanics in Phase 1.5; network requests are rejected as single-player-only actions.
+Sabotage and Fake News usage also reset when the player selects **Next Day**. The debrief reports sabotage correction status and whether Fake News worked, failed, or backfired. These are implemented single-player mechanics. Network requests are rejected as single-player-only actions. In older documents, "Phase 1.5" means a development milestone, not a gameplay phase or screen.
 
 ## 6. Information and UI
 
@@ -267,7 +267,7 @@ Phase 1 is complete when all of the following are true:
 - The same seed produces the same sequence of market results.
 - The game can be played without inspecting the debugger or project files.
 
-## 11. Phase 1.5: Market Manipulation
+## 11. Single-player manipulation milestone: Market Manipulation
 
 After the core loop is stable, add optional actions that spend money or a limited influence resource.
 

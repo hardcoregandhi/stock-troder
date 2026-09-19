@@ -24,6 +24,8 @@
 - Keep simulation rules independent from UI nodes.
 - Game UI must fit the target viewport without scroll bars. Use compact layouts, tabs, pages, or panels instead of vertical scrolling.
 - Design UI for responsive 16:9 viewports, not one fixed pixel resolution. Use anchors, proportional regions, minimum readable sizes, and tabs/pages when content needs more room.
+- `Brief` and `Debrief` are runtime UI states built inside `TradingDashboard`; do not expect separate `brief.tscn` or `brief.gd` files.
+- Pump, Sabotage, and Fake News are implemented single-player mechanics. "Phase 1.5" in older docs means a development milestone, not a gameplay phase or screen. Multiplayer requests for these actions remain rejected until multiplayer rules are designed.
 - Forward actions such as Continue, Next Day, Start Trading, and Restart belong in the bottom-right action area and use a subtle green style.
 - Store currency internally as integer pence and format it as pounds in the UI.
 - Keep seeded market simulation deterministic for repeatable tests.
