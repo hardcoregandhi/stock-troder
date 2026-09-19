@@ -134,14 +134,10 @@ func _build_ui() -> void:
 	margin.add_child(page)
 	page.add_child(_build_header())
 	page.add_child(_build_status_bar())
-	var body_scroll := ScrollContainer.new()
-	body_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	body_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	page.add_child(body_scroll)
 	var body := HBoxContainer.new()
-	body.custom_minimum_size.y = 470
+	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	body.add_theme_constant_override("separation", 14)
-	body_scroll.add_child(body)
+	page.add_child(body)
 	body.add_child(_build_market_panel())
 	body.add_child(_build_detail_panel())
 
@@ -204,13 +200,7 @@ func _build_market_panel() -> Control:
 	stock_list.add_theme_constant_override("h_separation", 6)
 	stock_list.add_theme_constant_override("v_separation", 5)
 	_build_stock_header()
-	var stock_scroll := ScrollContainer.new()
-	stock_scroll.custom_minimum_size.y = 170
-	stock_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	stock_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
-	stock_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
-	stock_scroll.add_child(stock_list)
-	content.add_child(stock_scroll)
+	content.add_child(stock_list)
 	return panel
 
 func _build_detail_panel() -> Control:
@@ -247,14 +237,10 @@ func _build_detail_panel() -> Control:
 	pump_status.custom_minimum_size = Vector2(300, 38)
 	content.add_child(pump_status)
 	content.add_child(_label("NEWS FEED", 12, MUTED))
-	var news_scroll := ScrollContainer.new()
-	news_scroll.custom_minimum_size.y = 104
-	news_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	news_feed = VBoxContainer.new()
 	news_feed.custom_minimum_size.x = 300
 	news_feed.add_theme_constant_override("separation", 5)
-	news_scroll.add_child(news_feed)
-	content.add_child(news_scroll)
+	content.add_child(news_feed)
 	return panel
 
 func _panel() -> PanelContainer:
@@ -651,10 +637,6 @@ func _build_debrief_news_panel(resolutions: Array[Dictionary]) -> Control:
 	content.add_theme_constant_override("separation", 5)
 	panel.add_child(content)
 	content.add_child(_label("NEWS FEED", 12, MUTED))
-	var scroll := ScrollContainer.new()
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	content.add_child(scroll)
 	var grid := GridContainer.new()
 	grid.columns = 4
 	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -685,7 +667,7 @@ func _build_debrief_news_panel(resolutions: Array[Dictionary]) -> Control:
 		var action := _label(action_text, 10, ACCENT if bool(resolution.get("pump_used", false)) else MUTED)
 		action.custom_minimum_size.x = 120
 		grid.add_child(action)
-	scroll.add_child(grid)
+	content.add_child(grid)
 	return panel
 
 func _build_debrief_details_panel(resolutions: Array[Dictionary]) -> Control:
@@ -694,14 +676,10 @@ func _build_debrief_details_panel(resolutions: Array[Dictionary]) -> Control:
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	panel.size_flags_stretch_ratio = 1.0
 	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	var scroll := ScrollContainer.new()
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	panel.add_child(scroll)
 	var content := VBoxContainer.new()
 	content.add_theme_constant_override("separation", 5)
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(content)
+	panel.add_child(content)
 	content.add_child(_label("RESULT AND HOLDINGS", 12, MUTED))
 	var round_record: Dictionary = session.completed_rounds.back() if not session.completed_rounds.is_empty() else {}
 	var player_result := int(round_record.get("player_return_pence", session.game_state.total_return_pence()))
