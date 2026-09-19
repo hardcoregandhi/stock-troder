@@ -18,7 +18,7 @@ The key design question is:
 
 ## 2. Current Strategic Model
 
-The player starts with £10,000 and trades six fictional stocks across ten rounds. Each round has:
+The player starts with £1,000 and trades six fictional stocks across ten rounds. Each round has:
 
 - A forecast before trading starts.
 - A 30-second live market.
@@ -77,7 +77,7 @@ A buy action has at least three costs:
 - The risk of the chosen stock falling.
 - The lost chance to act on another stock.
 
-Pump makes opportunity cost visible because it spends £250 without directly buying an asset.
+Pump makes opportunity cost visible because it spends £25 without directly buying an asset.
 
 ### 3.4 Information asymmetry
 
@@ -146,7 +146,7 @@ A strong strategy should adapt. If the same action is best in every round, the r
 
 The current Pump action is a simple asymmetric bet:
 
-- Cost: £250.00.
+- Cost: £25.00.
 - Target: one selected stock.
 - Limit: once per stock per round.
 - Short-term effect: 4% positive live path boost.
@@ -160,7 +160,7 @@ Pump is not a normal trade. It spends cash to change the shape of the risk.
 The player must decide:
 
 - Is the target stock already likely to rise?
-- Is the 4% boost worth £250?
+- Is the 4% boost worth £25?
 - Can the player sell before the correction?
 - Is the cash better used to buy shares?
 - Is the player willing to accept a bad final resolution?
@@ -480,7 +480,7 @@ It is not yet a full economic simulation or a multiplayer negotiation game. Thos
 
 ### 12.1 What theory can and cannot tell us
 
-Game theory does not tell us that the player should start with £10,000, that Pump should cost £250, or that a planted news story should cost a particular amount. Those are design parameters.
+Game theory does not tell us that the player should start with £1,000, that Pump should cost £25, or that a planted news story should cost a particular amount. Those are design parameters.
 
 Theory can tell us what to ask about the parameters:
 
@@ -502,10 +502,10 @@ For the current prototype:
 ```text
 starting cash = 100 budget units
 Pump cost = 2.5 budget units
-Pump cost as cash = £250 on a £10,000 start
+Pump cost as cash = £25 on a £1,000 start
 ```
 
-This makes later changes easier. If the starting cash becomes £5,000, the Pump cost can remain 2.5% rather than becoming an unrelated new number.
+This makes later changes easier. If the starting cash becomes £500, the Pump cost can remain 2.5% rather than becoming an unrelated new number.
 
 The starting amount should be large enough to support several meaningful purchases, but small enough that cash remains scarce. The current stock prices give the player different levels of exposure to each stock. That is useful, but the real test is whether the player must choose between concentration, diversification, Pump, and holding cash.
 
@@ -518,7 +518,7 @@ action_cost = starting_cash * cost_percent
 action_value = position_value * expected_effect_percent
 ```
 
-An action is interesting when its value is plausible but not certain. For example, Pump should be compared with the profit from buying shares, not with the full £10,000 bankroll.
+An action is interesting when its value is plausible but not certain. For example, Pump should be compared with the profit from buying shares, not with the full £1,000 bankroll.
 
 For every paid action, record:
 

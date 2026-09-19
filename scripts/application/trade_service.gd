@@ -29,7 +29,7 @@ func sell(state: GameState, symbol: String, quantity: int) -> Dictionary:
 	return _trade_result(state, true, "Sold shares.", symbol, quantity, stock)
 
 func pump(state: GameState, symbol: String) -> Dictionary:
-	var stock := state.get_stock(symbol)
+	var stock: StockData = state.get_stock(symbol)
 	if state.phase != GameState.Phase.TRADING:
 		return _pump_result(state, false, "Pump is only available during trading.", symbol, 0, false, 0.0, false)
 	if stock == null:

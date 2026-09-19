@@ -9,9 +9,12 @@ enum Phase {
 	COMPLETE,
 }
 
-const STARTING_CASH_PENCE: int = 1_000_000
+const STARTING_CASH_PENCE: int = 100_000
 const DEFAULT_TOTAL_DAYS: int = 10
-const PUMP_COST_PENCE: int = 25_000
+const DEFAULT_STOCK_COUNT: int = 6
+const MIN_STOCK_COUNT: int = 1
+const MAX_STOCK_COUNT: int = 6
+const PUMP_COST_PENCE: int = 2_500
 
 var starting_cash_pence: int = STARTING_CASH_PENCE
 var cash_pence: int = STARTING_CASH_PENCE
@@ -22,18 +25,20 @@ var stocks: Array[StockData] = []
 var holdings: Dictionary = {}
 var pumped_symbols: Dictionary = {}
 var seed: int
+var stock_count: int = DEFAULT_STOCK_COUNT
 
 const TRADE_SERVICE = preload("res://scripts/application/trade_service.gd")
 
-func _init(run_seed: int = 0, run_total_days: int = DEFAULT_TOTAL_DAYS) -> void:
+func _init(run_seed: int = 0, run_total_days: int = DEFAULT_TOTAL_DAYS, run_stock_count: int = DEFAULT_STOCK_COUNT) -> void:
 	seed = run_seed
 	total_days = maxi(1, run_total_days)
-	stocks = StockData.create_default_catalog()
+	stock_count = clampi(run_stock_count, MIN_STOCK_COUNT, MAX_STOCK_COUNT)
+	stocks = StockData.create_default_catalog(stock_count)
 	for stock in stocks:
 		holdings[stock.symbol] = 0
 
-static func create_default(run_seed: int = 0, run_total_days: int = DEFAULT_TOTAL_DAYS) -> GameState:
-	return GameState.new(run_seed, run_total_days)
+static func create_default(run_seed: int = 0, run_total_days: int = DEFAULT_TOTAL_DAYS, run_stock_count: int = DEFAULT_STOCK_COUNT) -> GameState:
+	return GameState.new(run_seed, run_total_days, run_stock_count)
 
 func get_stock(symbol: String) -> StockData:
 	for stock in stocks:

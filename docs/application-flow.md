@@ -15,9 +15,11 @@ Main Menu
 ### Single Player
 
 - Creates a local `TradingSession`.
-- Starts a fresh seeded run.
+- Starts a fresh seeded run with the default six-stock catalog, or a bounded local stock count for test setup.
 - Opens the trading dashboard.
 - Returns to the main menu after the run summary or when the player leaves.
+
+The stock catalog is created by `GameState`, not by the dashboard. A configured count keeps the first stocks in stable order, so seeded runs remain repeatable and future host setup can use the same boundary.
 
 ### Multiplayer
 
@@ -57,6 +59,8 @@ Main
 The menu owns navigation. The trading dashboard owns trading presentation. The session owns game rules.
 
 No screen should modify cash, prices, holdings, or network authority directly.
+
+The dashboard shows all configured stocks together on one live chart. The selected stock controls the detail panel only. The legend uses each stock's stable color with its symbol, company name, and current price, so text remains available when colors are hard to distinguish.
 
 ## 3. Multiplayer Format
 

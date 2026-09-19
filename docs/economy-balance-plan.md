@@ -71,6 +71,7 @@ Useful pairings:
 Record these for every strategy:
 
 - Mean final cash.
+- Starting cash baseline: £1,000 (100,000 pence).
 - Median final cash.
 - Standard deviation.
 - 10th and 90th percentile final cash.
@@ -214,7 +215,7 @@ Use automated sampling first, then human playtesting on a small set of promising
 
 ## 13. Current StockTroder Parameters to Sweep
 
-- Starting cash: £5,000, £10,000, £15,000.
+- Starting cash: £500, £1,000, £1,500.
 - Round length: 20, 30, 40 seconds.
 - Market sample interval: 0.5 seconds initially.
 - Pump cost: 1%, 2.5%, 4% of starting cash.

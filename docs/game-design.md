@@ -17,7 +17,7 @@ The first playable version should make the buy/sell/beat-the-clock loop enjoyabl
 
 ### Phase 1 goals
 
-- Start a new run with a fixed amount of cash in pounds sterling.
+- Start a new run with £1,000.00 in cash.
 - Show several fictional stocks with current prices, daily movement, and a projection before each trading day begins.
 - Let the player buy and sell whole shares.
 - Give the player a short real-time trading window for each day.
@@ -46,7 +46,7 @@ The first playable version should make the buy/sell/beat-the-clock loop enjoyabl
 
 ## 3. Core Game Loop
 
-Each run lasts a fixed number of trading days. The initial prototype should use **10 trading days**, **£10,000 starting cash**, and a **30-second live trading round** per day. The round length is a tuning value and may change after playtesting.
+Each run lasts a fixed number of trading days. The initial prototype should use **10 trading days**, **£1,000 starting cash**, and a **30-second live trading round** per day. The round length is a tuning value and may change after playtesting.
 
 1. The simulation generates a projection for each stock before the day starts.
 2. The player reviews current prices, projections, news, cash, and holdings.
@@ -73,8 +73,10 @@ Suggested initial stocks:
 | BRK | Brickline Retail | Stable consumer stock |
 | CYN | Cyanic Energy | News-sensitive energy stock |
 | DSK | Deskbound Software | Moderate technology stock |
-| HBR | Harbor Foods | Defensive, slower-moving stock |
-| NOV | Nova Biotech | High-risk binary events |
+| HBR | Evergreen Foods | Defensive, slower-moving stock |
+| NOV | Frontier Biotech | High-risk binary events |
+
+The default catalog has six stocks. A local run may use a smaller catalog for testing or future match setup, from one to six stocks, while preserving this order and the same seeded behavior. Symbols remain stable.
 
 Each stock has:
 
@@ -125,10 +127,10 @@ The simulation should use a seeded random number generator so a run can be repro
 
 The player begins with:
 
-- Cash: £10,000.
+- Cash: £1,000.
 - Shares: 0 in every stock.
 - Trading fee: none for the first prototype.
-- Pump cost: **£250.00 (25,000 pence)** per use. This is 2.5% of the £10,000 starting cash, so it matters but does not block normal trading.
+- Pump cost: **£25.00 (2,500 pence)** per use. This is 2.5% of the £1,000 starting cash, so it matters but does not block normal trading.
 
 Rules:
 
@@ -144,7 +146,7 @@ A small transaction fee can be added after the basic loop works, but it should n
 
 ### Phase 1.5 Pump
 
-Pump is a single-player action available only during `TRADING`. It targets the selected stock and costs £250.00 immediately. Each stock can be pumped once per round. A successful Pump lifts that stock's short-term live price path by 4%, but the round resolution applies a correction risk: there is a seeded 65% chance of an 8% correction and a 35% chance of a smaller 2% correction. The result is never a guaranteed profit, and the normal £1.00 price floor still applies.
+Pump is a single-player action available only during `TRADING`. It targets the selected stock and costs £25.00 immediately. Each stock can be pumped once per round. A successful Pump lifts that stock's short-term live price path by 4%, but the round resolution applies a correction risk: there is a seeded 65% chance of an 8% correction and a 35% chance of a smaller 2% correction. The result is never a guaranteed profit, and the normal £1.00 price floor still applies.
 
 The player can see the cost, availability, and correction risk in the dashboard. Pump usage resets when the player selects **Next Day**. The debrief reports whether a Pump correction affected the resolved result.
 
@@ -155,8 +157,10 @@ The main screen should be a compact trading dashboard rather than a collection o
 ### Required areas
 
 - **Top status bar:** current day, seconds remaining, cash, portfolio value, and total return.
-- **Stock list:** symbol, name, current price, projected change, shares owned, position value, and Buy/Sell buttons.
-- **Selected stock panel:** larger price display, historical line graph, company name, projection range, confidence label, and short news/event text.
+- **Stock list:** symbol, name, current price, projected change, shares owned, position value, stable color marker, and one-share Buy/Sell buttons.
+- **Selected stock panel:** larger price display, company name, projection range, confidence label, and short news/event text.
+- **Shared market chart:** one live multi-series graph for every configured stock, with a text legend showing each symbol, company, color, and current price.
+- **News feed:** timestamped stock headlines with forecast signals and resolved outcomes.
 - **Trade controls:** quantity input or stepper, Buy button, Sell button, and a clear validation message. Each stock row should also provide fast one-click buy and sell actions.
 - **Trading clock:** prominent countdown from 30 seconds to zero that remains visible while the player trades.
 - **Debrief:** a pause after each round showing resolved prices, changes, portfolio value, and the news items that affected the round.
@@ -173,6 +177,7 @@ The main screen should be a compact trading dashboard rather than a collection o
 - Invalid trades explain why they failed.
 - The player can always see which stock is selected.
 - The graph must update during the round as live price samples arrive, then retain the completed round in the run history.
+- Stock prices should use large denominations so one share is a meaningful decision and the player can go all-in or diversify.
 
 ## 7. News Events
 
@@ -199,7 +204,7 @@ Keep simulation logic independent from the UI so the same model can later suppor
 - `StockData`: data object for one stock's identity, price, history, and traits.
 - `TradeService`: validates and executes buy/sell actions against `GameState`.
 - `TradingDashboard`: displays state and sends player actions to the game model.
-- `StockChart`: renders historical prices for the selected stock.
+- `StockChart`: renders live and historical prices for every configured stock in one shared chart. The selected stock remains the detail-panel focus.
 - `RunSummary`: displays the final result and restarts the run.
 
 The UI should react to state changes rather than directly modifying prices, cash, or holdings. This keeps rules in one place and makes future multiplayer authority easier to add.
@@ -209,7 +214,7 @@ The UI should react to state changes rather than directly modifying prices, cash
 ### Milestone 1: Simulation shell
 
 - Create a main scene and game state.
-- Generate the initial stock catalog.
+- Generate the initial stock catalog with a bounded stock count. The default is six stocks.
 - Add seeded round projections and automatic 30-second round resolution.
 - Add a debrief pause and player-controlled Next Day transition.
 - Add a temporary debug display for day, prices, and cash.
@@ -224,7 +229,7 @@ The UI should react to state changes rather than directly modifying prices, cash
 ### Milestone 3: Dashboard
 
 - Replace debug display with the trading dashboard.
-- Add stock selection and a line graph.
+- Add stock selection, a shared multi-stock line graph, and a matching text legend.
 - Add daily news text and clear trade feedback.
 - Add end-of-run summary and restart flow.
 
@@ -239,8 +244,9 @@ The UI should react to state changes rather than directly modifying prices, cash
 
 Phase 1 is complete when all of the following are true:
 
-- A new run starts with £10,000 cash and six stocks.
-- The player can select a stock and see its price history.
+- A new run starts with £1,000 cash and six stocks by default.
+- A configured run can use one to six stocks without changing their stable order or seeded results.
+- The player can select a stock for details while the shared chart shows every configured stock.
 - Each stock shows a clearly labeled projection before the trading window starts.
 - The player can buy and sell valid quantities.
 - Invalid trades are rejected without changing the game state.

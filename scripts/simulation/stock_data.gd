@@ -43,33 +43,45 @@ func _init(
 	trend = stock_trend
 	news_events = stock_news_events.duplicate(true)
 
-static func create_default_catalog() -> Array[StockData]:
-	return [
-		StockData.new("AUR", "Aurora Robotics", "Volatile growth stock", 1_250, 0.085, 0.012, [
+static func create_default_catalog(stock_count: int = 6) -> Array[StockData]:
+	var catalog: Array[StockData] = [
+		StockData.new("AUR", "Aurora Robotics", "Volatile growth stock", 5_000, 0.085, 0.012, [
 			{"text": "Prototype demonstration draws attention", "impact": 0.035},
 			{"text": "Manufacturing costs rise unexpectedly", "impact": -0.030},
 		]),
-		StockData.new("BRK", "Brickline Retail", "Stable consumer stock", 850, 0.035, 0.004, [
+		StockData.new("BRK", "Brickline Retail", "Stable consumer stock", 10_000, 0.035, 0.004, [
 			{"text": "Quarterly sales remain steady", "impact": 0.012},
 			{"text": "Retail footfall softens slightly", "impact": -0.010},
 		]),
-		StockData.new("CYN", "Cyanic Energy", "News-sensitive energy stock", 1_420, 0.075, 0.002, [
+		StockData.new("CYN", "Cyanic Energy", "News-sensitive energy stock", 25_000, 0.075, 0.002, [
 			{"text": "New energy contract announced", "impact": 0.040},
 			{"text": "Regulatory review creates uncertainty", "impact": -0.045},
 		]),
-		StockData.new("DSK", "Deskbound Software", "Moderate technology stock", 1_100, 0.055, 0.008, [
+		StockData.new("DSK", "Deskbound Software", "Moderate technology stock", 50_000, 0.055, 0.008, [
 			{"text": "Subscription growth beats expectations", "impact": 0.022},
 			{"text": "A major client delays renewal", "impact": -0.020},
 		]),
-		StockData.new("HBR", "Harbor Foods", "Defensive, slower-moving stock", 680, 0.022, 0.003, [
+		StockData.new("HBR", "Evergreen Foods", "Defensive, slower-moving stock", 75_000, 0.022, 0.003, [
 			{"text": "Staple food demand stays resilient", "impact": 0.010},
 			{"text": "Input prices pressure margins", "impact": -0.012},
 		]),
-		StockData.new("NOV", "Nova Biotech", "High-risk binary events", 2_100, 0.120, 0.0, [
+		StockData.new("NOV", "Frontier Biotech", "High-risk binary events", 100_000, 0.120, 0.0, [
 			{"text": "Clinical trial results look promising", "impact": 0.095},
 			{"text": "Clinical trial results disappoint", "impact": -0.110},
 		]),
 	]
+	return catalog.slice(0, clampi(stock_count, 1, catalog.size()))
+
+static func color_for_index(index: int) -> Color:
+	var palette := [
+		Color("65b9d6"),
+		Color("f2c14e"),
+		Color("e76f51"),
+		Color("7bd389"),
+		Color("c084fc"),
+		Color("f78fb3"),
+	]
+	return palette[wrapi(index, 0, palette.size())]
 
 func set_projection(change: float, low: float, high: float, news: String, impact: float) -> void:
 	round_open_price_pence = current_price_pence

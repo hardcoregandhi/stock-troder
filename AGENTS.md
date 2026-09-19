@@ -15,6 +15,7 @@
 - Godot is installed and available through the Godot AI MCP server connected to the editor.
 - The terminal may not have a standalone `godot` executable on `PATH`; do not conclude that Godot is unavailable from a terminal lookup alone.
 - Use the Godot MCP tools for editor state, project runs, runtime inspection, GDScript evaluation, filesystem scans, and Godot-specific tests when available.
+- If Godot is closed or restarted through MCP, the editor bridge may not reconnect automatically. The user must reopen the project in Godot and wait for the MCP plugin to reconnect before Godot validation can continue.
 - The project currently has no configured main scene until one is created and assigned in `project.godot`.
 - After adding `class_name` scripts, refresh the Godot editor filesystem with an MCP scan before relying on global class registration.
 

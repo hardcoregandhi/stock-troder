@@ -36,11 +36,11 @@ func _ready() -> void:
 	day_timer.time_updated.connect(_on_time_updated)
 	day_timer.timed_out.connect(_on_day_timer_timed_out)
 
-func start_run(run_seed: int = DEFAULT_SEED, run_total_days: int = GameState.DEFAULT_TOTAL_DAYS) -> void:
+func start_run(run_seed: int = DEFAULT_SEED, run_total_days: int = GameState.DEFAULT_TOTAL_DAYS, stock_count: int = GameState.DEFAULT_STOCK_COUNT) -> void:
 	if day_timer == null:
 		return
 	day_timer.stop()
-	game_state = GameState.create_default(run_seed, run_total_days)
+	game_state = GameState.create_default(run_seed, run_total_days, stock_count)
 	market_simulator = MarketSimulator.new(run_seed)
 	trade_service = TradeService.new()
 	market_sample_elapsed = 0.0
@@ -54,7 +54,7 @@ func start_network_host(lobby: NetworkLobby, player_ids: Array[int], run_seed: i
 	network_local_player_id = 1
 	network_player_states.clear()
 	network_ready_players.clear()
-	start_run(run_seed, GameState.DEFAULT_TOTAL_DAYS)
+	start_run(run_seed, GameState.DEFAULT_TOTAL_DAYS, GameState.DEFAULT_STOCK_COUNT)
 	for player_id in player_ids:
 		var player_state: GameState = game_state if player_id == network_local_player_id else GameState.create_default(run_seed, game_state.total_days)
 		player_state.stocks = game_state.stocks

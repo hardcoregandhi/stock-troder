@@ -29,31 +29,41 @@ var pump_button: Button
 var pump_status: Label
 var network_status: Label
 var chart: StockHistoryChart
+var chart_legend: Control
 var summary_panel: PanelContainer
 var summary_layer: Control
 var debrief_panel: PanelContainer
 var debrief_layer: Control
 var selected_symbol := "AUR"
 var row_labels: Dictionary = {}
+var news_feed: VBoxContainer
+var news_history: Array[Dictionary] = []
 
 class StockHistoryChart extends Control:
-	var values: Array[int] = []
-	var line_color := Color("65b9d6")
+	var series: Array[Dictionary] = []
 	var grid_color := Color("2b4655")
 
-	func set_values(new_values: Array[int]) -> void:
-		values = new_values.duplicate()
+	func set_series(new_series: Array[Dictionary]) -> void:
+		series = new_series.duplicate(true)
 		queue_redraw()
 
 	func _draw() -> void:
 		var area := Rect2(58.0, 18.0, size.x - 70.0, size.y - 48.0)
 		if area.size.x <= 0.0 or area.size.y <= 0.0:
 			return
-		if values.size() < 2:
+		var drawable_series: Array[Dictionary] = []
+		var minimum := INF
+		var maximum := -INF
+		for item in series:
+			var values: Array = item.get("values", [])
+			if values.size() < 2:
+				continue
+			drawable_series.append(item)
+			minimum = minf(minimum, float(values.min()))
+			maximum = maxf(maximum, float(values.max()))
+		if drawable_series.is_empty():
 			draw_string(ThemeDB.fallback_font, Vector2(66.0, size.y * 0.55), "History will appear after the first close", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 13, MUTED)
 			return
-		var minimum := float(values.min())
-		var maximum := float(values.max())
 		var spread := maxf(1.0, maximum - minimum)
 		for index in range(5):
 			var fraction := float(index) / 4.0
@@ -68,13 +78,16 @@ class StockHistoryChart extends Control:
 		draw_string(ThemeDB.fallback_font, Vector2(area.position.x, size.y - 10.0), "OLDER", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 10, MUTED)
 		draw_string(ThemeDB.fallback_font, Vector2(area.end.x - 30.0, size.y - 10.0), "NOW", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 10, MUTED)
 		draw_string(ThemeDB.fallback_font, Vector2(area.position.x, 12.0), "PRICE (£)", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 10, MUTED)
-		var points := PackedVector2Array()
-		for index in values.size():
-			var x := area.position.x + area.size.x * float(index) / float(values.size() - 1)
-			var y := area.end.y - area.size.y * (float(values[index]) - minimum) / spread
-			points.append(Vector2(x, y))
-		draw_polyline(points, line_color, 2.0, true)
-		draw_circle(points[points.size() - 1], 4.0, line_color)
+		for item in drawable_series:
+			var values: Array = item["values"]
+			var points := PackedVector2Array()
+			for index in values.size():
+				var x := area.position.x + area.size.x * float(index) / float(values.size() - 1)
+				var y := area.end.y - area.size.y * (float(values[index]) - minimum) / spread
+				points.append(Vector2(x, y))
+			var line_color: Color = item["color"]
+			draw_polyline(points, line_color, 2.0, true)
+			draw_circle(points[points.size() - 1], 3.0, line_color)
 
 	func _format_price(price_pence: int) -> String:
 		return "£%d.%02d" % [price_pence / 100, price_pence % 100]
@@ -162,13 +175,21 @@ func _status_item(parent: Control, caption: String, value: String, color: Color)
 
 func _build_market_panel() -> Control:
 	var panel := _panel()
-	panel.custom_minimum_size.x = 560
+	panel.custom_minimum_size.x = 690
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var content := VBoxContainer.new()
 	content.add_theme_constant_override("separation", 8)
 	panel.add_child(content)
-	content.add_child(_label("MARKET", 13, MUTED))
-	content.add_child(_label("Choose a stock to inspect, then trade before the clock runs out.", 12, MUTED))
+	content.add_child(_label("LIVE MARKET", 13, MUTED))
+	content.add_child(_label("All configured stocks. Select a row for detail, or trade one share now.", 12, MUTED))
+	chart = StockHistoryChart.new()
+	chart.custom_minimum_size.y = 178
+	chart.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	content.add_child(chart)
+	chart_legend = FlowContainer.new()
+	chart_legend.add_theme_constant_override("separation", 12)
+	chart_legend.custom_minimum_size.y = 26
+	content.add_child(chart_legend)
 	content.add_child(_build_stock_header())
 	stock_list = VBoxContainer.new()
 	stock_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -178,7 +199,7 @@ func _build_market_panel() -> Control:
 
 func _build_detail_panel() -> Control:
 	var panel := _panel()
-	panel.custom_minimum_size.x = 460
+	panel.custom_minimum_size.x = 360
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var content := VBoxContainer.new()
 	content.add_theme_constant_override("separation", 10)
@@ -193,10 +214,6 @@ func _build_detail_panel() -> Control:
 	detail_projection.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	detail_projection.custom_minimum_size.y = 30
 	content.add_child(detail_projection)
-	chart = StockHistoryChart.new()
-	chart.custom_minimum_size.y = 135
-	chart.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	content.add_child(chart)
 	detail_news = _label("NEWS  --", 13, MUTED)
 	detail_news.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(detail_news)
@@ -229,14 +246,22 @@ func _build_detail_panel() -> Control:
 	pump_row.add_theme_constant_override("separation", 8)
 	pump_button = Button.new()
 	pump_button.text = "PUMP"
-	pump_button.tooltip_text = "Spend £250.00 to lift this stock's live path. Correction risk at resolution."
+	pump_button.tooltip_text = "Spend £25.00 to lift this stock's live path. Correction risk at resolution."
 	pump_button.custom_minimum_size.x = 90
 	pump_button.pressed.connect(_on_pump)
 	pump_row.add_child(pump_button)
-	pump_status = _label("PUMP COST £250.00 | Once per stock per round", 12, MUTED)
+	pump_status = _label("PUMP COST £25.00 | Once per stock per round", 12, MUTED)
 	pump_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	pump_row.add_child(pump_status)
 	content.add_child(pump_row)
+	content.add_child(_label("NEWS FEED", 12, MUTED))
+	var news_scroll := ScrollContainer.new()
+	news_scroll.custom_minimum_size.y = 104
+	news_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	news_feed = VBoxContainer.new()
+	news_feed.add_theme_constant_override("separation", 5)
+	news_scroll.add_child(news_feed)
+	content.add_child(news_scroll)
 	return panel
 
 func _panel() -> PanelContainer:
@@ -264,12 +289,13 @@ func _label(text: String, font_size: int, color: Color) -> Label:
 func _build_stock_header() -> Control:
 	var line := HBoxContainer.new()
 	line.add_theme_constant_override("separation", 8)
-	line.add_child(_column_label("STOCK", 54))
-	line.add_child(_column_label("COMPANY", 142))
+	line.add_child(_column_label("SYMBOL", 54))
+	line.add_child(_column_label("COMPANY", 108))
 	line.add_child(_column_label("LIVE", 76))
-	line.add_child(_column_label("EST. END", 70))
-	line.add_child(_column_label("SHARES", 42))
-	line.add_child(_column_label("TRADE", 72))
+	line.add_child(_column_label("ROUND", 62))
+	line.add_child(_column_label("EST. RANGE", 100))
+	line.add_child(_column_label("POSITION", 90))
+	line.add_child(_column_label("TRADE", 78))
 	return line
 
 func _column_label(text: String, width: float) -> Label:
@@ -292,6 +318,16 @@ func _on_market_updated(_snapshot: Dictionary) -> void:
 	_refresh()
 
 func _on_day_resolved(day: int, resolutions: Array[Dictionary], _snapshot: Dictionary) -> void:
+	for resolution in resolutions:
+		news_history.append({
+			"day": day,
+			"symbol": str(resolution["symbol"]),
+			"text": str(resolution["news"]),
+			"resolved": true,
+			"change": float(resolution["percentage_change"]),
+		})
+	if news_history.size() > 18:
+		news_history = news_history.slice(news_history.size() - 18)
 	_refresh()
 	if session.game_state.phase == GameState.Phase.DEBRIEF:
 		_show_debrief(day, resolutions)
@@ -335,44 +371,55 @@ func _build_stock_rows(state: GameState) -> void:
 		row.add_child(line)
 		var select := Button.new()
 		select.text = stock.symbol
+		select.add_theme_color_override("font_color", StockData.color_for_index(state.stocks.find(stock)))
 		select.custom_minimum_size.x = 54
 		select.pressed.connect(_select_stock.bind(stock.symbol))
 		line.add_child(select)
 		var company := _label(stock.company_name, 12, TEXT)
-		company.custom_minimum_size.x = 142
+		company.add_theme_color_override("font_color", StockData.color_for_index(state.stocks.find(stock)))
+		company.custom_minimum_size.x = 108
 		line.add_child(company)
 		var price := _label("", 13, TEXT)
 		price.custom_minimum_size.x = 76
 		line.add_child(price)
 		var change := _label("", 12, ACCENT)
-		change.custom_minimum_size.x = 70
+		change.custom_minimum_size.x = 62
 		line.add_child(change)
-		var shares := _label("", 12, TEXT)
-		shares.custom_minimum_size.x = 42
-		line.add_child(shares)
+		var range := _label("", 11, ACCENT)
+		range.custom_minimum_size.x = 100
+		line.add_child(range)
+		var position := _label("", 11, TEXT)
+		position.custom_minimum_size.x = 90
+		line.add_child(position)
 		var buy := Button.new()
-		buy.text = "+"
+		buy.text = "BUY"
 		buy.tooltip_text = "Buy one share"
-		buy.custom_minimum_size.x = 32
+		buy.custom_minimum_size.x = 38
 		buy.pressed.connect(_quick_buy.bind(stock.symbol))
 		line.add_child(buy)
 		var sell := Button.new()
-		sell.text = "-"
+		sell.text = "SELL"
 		sell.tooltip_text = "Sell one share"
-		sell.custom_minimum_size.x = 32
+		sell.custom_minimum_size.x = 38
 		sell.pressed.connect(_quick_sell.bind(stock.symbol))
 		line.add_child(sell)
 		stock_list.add_child(row)
-		row_labels[stock.symbol] = {"price": price, "change": change, "shares": shares}
+		row_labels[stock.symbol] = {"price": price, "change": change, "range": range, "position": position, "buy": buy, "sell": sell}
 	_update_stock_rows(state)
 
 func _update_stock_rows(state: GameState) -> void:
 	for stock in state.stocks:
 		var labels: Dictionary = row_labels[stock.symbol]
 		labels["price"].text = _format_pence(stock.current_price_pence)
-		labels["change"].text = "%+.1f%%" % (stock.projection_change * 100.0)
-		labels["change"].add_theme_color_override("font_color", POSITIVE if stock.projection_change >= 0 else NEGATIVE)
-		labels["shares"].text = "%d sh" % int(state.holdings[stock.symbol])
+		var round_change := _round_change(stock)
+		labels["change"].text = "%+.1f%%" % round_change
+		labels["change"].add_theme_color_override("font_color", POSITIVE if round_change >= 0 else NEGATIVE)
+		labels["range"].text = "%+.1f%% to %+.1f%%" % [stock.projection_low * 100.0, stock.projection_high * 100.0]
+		var shares := int(state.holdings[stock.symbol])
+		labels["position"].text = "%d sh  %s" % [shares, _format_pence(stock.current_price_pence * shares)]
+		var can_trade := state.phase == GameState.Phase.TRADING
+		labels["buy"].disabled = not can_trade
+		labels["sell"].disabled = not can_trade or shares <= 0
 
 func _update_detail(state: GameState) -> void:
 	var stock := state.get_stock(selected_symbol)
@@ -394,10 +441,62 @@ func _update_detail(state: GameState) -> void:
 		elif state.has_pumped(stock.symbol):
 			pump_status.text = "PUMP USED for %s this round" % stock.symbol
 		elif state.cash_pence < GameState.PUMP_COST_PENCE:
-			pump_status.text = "PUMP UNAVAILABLE | Need £250.00 cash"
+			pump_status.text = "PUMP UNAVAILABLE | Need £25.00 cash"
 		else:
-			pump_status.text = "PUMP COST £250.00 | Once per stock per round"
-	chart.set_values(stock.graph_history_pence())
+			pump_status.text = "PUMP COST £25.00 | Once per stock per round"
+	var chart_series: Array[Dictionary] = []
+	for index in state.stocks.size():
+		var chart_stock: StockData = state.stocks[index]
+		chart_series.append({
+			"symbol": chart_stock.symbol,
+			"values": chart_stock.graph_history_pence(),
+			"color": StockData.color_for_index(index),
+		})
+	chart.set_series(chart_series)
+	_update_chart_legend(state)
+	_update_news_feed(state)
+
+func _round_change(stock: StockData) -> float:
+	if stock.round_open_price_pence <= 0:
+		return 0.0
+	return (float(stock.current_price_pence - stock.round_open_price_pence) / float(stock.round_open_price_pence)) * 100.0
+
+func _update_news_feed(state: GameState) -> void:
+	if news_feed == null:
+		return
+	for child in news_feed.get_children():
+		child.queue_free()
+	var entries: Array[Dictionary] = []
+	for item in news_history:
+		entries.append(item)
+	for index in state.stocks.size():
+		var stock: StockData = state.stocks[index]
+		entries.append({
+			"day": state.current_day,
+			"symbol": stock.symbol,
+			"text": stock.current_news,
+			"resolved": false,
+			"change": stock.projection_change,
+			"color": StockData.color_for_index(index),
+		})
+	var first_entry := maxi(0, entries.size() - 8)
+	for entry in entries.slice(first_entry):
+		var color: Color = entry.get("color", NEGATIVE if float(entry["change"]) < 0.0 else POSITIVE)
+		var status := "RESOLVED %+.1f%%" % (float(entry["change"]) * 100.0) if bool(entry["resolved"]) else "FORECAST"
+		var item := _label("ROUND %d  %s  %s\n%s: %s" % [int(entry["day"]), str(entry["symbol"]), status, "" if bool(entry["resolved"]) else "SIGNAL", str(entry["text"])], 11, color)
+		item.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		news_feed.add_child(item)
+
+func _update_chart_legend(state: GameState) -> void:
+	if chart_legend == null:
+		return
+	for child in chart_legend.get_children():
+		child.queue_free()
+	for index in state.stocks.size():
+		var stock: StockData = state.stocks[index]
+		var item := _label("%s %s %s" % [stock.symbol, stock.company_name, _format_pence(stock.current_price_pence)], 11, StockData.color_for_index(index))
+		item.tooltip_text = "%s %s" % [stock.symbol, stock.company_name]
+		chart_legend.add_child(item)
 
 func _select_stock(symbol: String) -> void:
 	selected_symbol = symbol
@@ -517,6 +616,7 @@ func _restart_run() -> void:
 		summary_layer = null
 	summary_panel = null
 	row_labels.clear()
+	news_history.clear()
 	for child in stock_list.get_children():
 		child.queue_free()
 	session.start_run()

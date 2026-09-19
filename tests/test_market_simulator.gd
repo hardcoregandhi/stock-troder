@@ -65,6 +65,19 @@ func test_same_seed_matches_projections_live_samples_and_resolution() -> void:
 	assert_eq(_prices(first_state), _prices(second_state))
 	assert_eq(first_simulator.resolve_day(first_state), second_simulator.resolve_day(second_state))
 
+func test_same_seed_matches_with_configured_multi_stock_catalog() -> void:
+	var first_state = GAME_STATE.create_default(404, 2, 4)
+	var second_state = GAME_STATE.create_default(404, 2, 4)
+	var first_simulator = MARKET_SIMULATOR.new(404)
+	var second_simulator = MARKET_SIMULATOR.new(404)
+	assert_eq(first_state.stocks.size(), 4)
+	assert_eq(first_state.stocks[3].symbol, "DSK")
+	assert_eq(first_simulator.prepare_day(first_state), second_simulator.prepare_day(second_state))
+	first_simulator.update_live_prices(first_state, 0.5)
+	second_simulator.update_live_prices(second_state, 0.5)
+	assert_eq(_prices(first_state), _prices(second_state))
+	assert_eq(first_simulator.resolve_day(first_state), second_simulator.resolve_day(second_state))
+
 func test_pump_changes_live_price_path() -> void:
 	var normal_state = GAME_STATE.new(515, 2)
 	var pumped_state = GAME_STATE.new(515, 2)

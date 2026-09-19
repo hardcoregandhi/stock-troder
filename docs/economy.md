@@ -16,7 +16,7 @@ A game economy does not need to copy a real economy. It needs to be readable, co
 
 Game theory and economy design can derive defensible starting values. They do not provide one inevitable answer. A board game can calculate how gold, items, and victory points should relate, then use playtesting to correct for timing, player perception, and unexpected strategies.
 
-For StockTroder, £10,000 is a scale for expressing budgets, prices, costs, gains, and losses. It is still derived from intended relationships, such as how many shares the player can buy and how much cash should remain available.
+For StockTroder, £1,000 is a scale for expressing budgets, prices, costs, gains, and losses. It is still derived from intended relationships, such as how many large-denomination shares the player can buy and how much cash should remain available.
 
 ## 3. The Basic Economy Model
 
@@ -55,7 +55,7 @@ Resources move in and out repeatedly. Players gain, spend, recover, and make new
 
 Value is discovered through competition and changing demand. This supports *For Sale*, *Modern Art*, and *Power Grid*.
 
-StockTroder is mainly a cycling economy with limited expansion: good rounds create more capital for later rounds.
+StockTroder is mainly a cycling economy with limited expansion: good rounds create more capital for later rounds. Its intended scale is a £1,000 bankroll with share prices such as £50, £100, £250, £500, £750, and £1,000.
 
 ## 5. Deriving Values Through Relationships
 
@@ -130,7 +130,7 @@ expected_pump_value = expected_pump_gain
 
 The model must include the player's ability to sell during the live round. A Pump that can be exited before correction is more valuable than one resolved only at the end.
 
-The current £250 cost, 4% boost, and correction risk are test hypotheses. They are useful only if normal buying, Pump, and holding cash are each best in some market states.
+The Pump cost must be re-scaled with the new bankroll. A first test value is 2.5% of starting cash, or £25, rather than the old £250 value. The 4% boost and correction risk remain test hypotheses. They are useful only if normal buying, Pump, and holding cash are each best in some market states.
 
 ### Planted news
 

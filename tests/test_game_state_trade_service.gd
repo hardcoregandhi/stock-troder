@@ -9,13 +9,38 @@ func suite_name() -> String:
 
 func test_new_state_has_starting_cash_and_catalog() -> void:
 	var state: GameState = GAME_STATE.new(123, 3)
-	assert_eq(state.cash_pence, 1_000_000)
-	assert_eq(state.starting_cash_pence, 1_000_000)
+	assert_eq(state.cash_pence, 100_000)
+	assert_eq(state.starting_cash_pence, 100_000)
 	assert_eq(state.stocks.size(), 6)
 	assert_eq(state.current_day, 1)
 	assert_eq(state.total_days, 3)
 	for stock in state.stocks:
 		assert_eq(state.holdings[stock.symbol], 0)
+
+func test_default_catalog_uses_large_opening_price_scale() -> void:
+	var state: GameState = GameState.create_default(123, 3)
+	var expected_prices := [5_000, 10_000, 25_000, 50_000, 75_000, 100_000]
+	var expected_symbols := ["AUR", "BRK", "CYN", "DSK", "HBR", "NOV"]
+	for index in state.stocks.size():
+		assert_eq(state.stocks[index].symbol, expected_symbols[index])
+		assert_eq(state.stocks[index].current_price_pence, expected_prices[index])
+
+func test_default_catalog_uses_e_and_f_names_for_fifth_and_sixth_stocks() -> void:
+	var state: GameState = GAME_STATE.create_default(123, 3)
+	assert_true(state.stocks[4].company_name.begins_with("E"))
+	assert_true(state.stocks[5].company_name.begins_with("F"))
+	assert_eq(state.stocks[4].symbol, "HBR")
+	assert_eq(state.stocks[5].symbol, "NOV")
+
+func test_stock_count_preserves_default_order_and_bounds() -> void:
+	var short_state: GameState = GAME_STATE.create_default(123, 3, 3)
+	assert_eq(short_state.stocks.size(), 3)
+	assert_eq(short_state.stocks[0].symbol, "AUR")
+	assert_eq(short_state.stocks[2].symbol, "CYN")
+	var minimum_state: GameState = GAME_STATE.create_default(123, 3, 0)
+	var maximum_state: GameState = GAME_STATE.create_default(123, 3, 99)
+	assert_eq(minimum_state.stocks.size(), GameState.MIN_STOCK_COUNT)
+	assert_eq(maximum_state.stocks.size(), GameState.MAX_STOCK_COUNT)
 
 func test_valid_buy_and_sell_update_cash_and_holdings() -> void:
 	var state: GameState = GAME_STATE.new(123, 3)

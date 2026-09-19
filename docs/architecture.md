@@ -134,11 +134,12 @@ GameState
   total_days: int
   phase: enum { PREPARING, TRADING, RESOLVING, DEBRIEF, COMPLETE }
   stocks: Array[StockData]
+  stock_count: int (1..6, default 6)
   holdings: Dictionary[String, int]
   seed: int
 ```
 
-Store currency as integer pence internally. Convert to formatted pounds only at the presentation boundary. This avoids floating-point rounding issues while keeping the UI in pounds, for example `£10,000.00`.
+Store currency as integer pence internally. Convert to formatted pounds only at the presentation boundary. This avoids floating-point rounding issues while keeping the UI in pounds, for example `£1,000.00`.
 
 ### `StockData`
 
@@ -237,6 +238,8 @@ Responsibilities:
 
 `TradingSession` owns the order of operations. The UI should call methods on this component instead of coordinating the simulation itself.
 
+`TradingSession.start_run(seed, total_days, stock_count)` passes the bounded catalog choice to `GameState.create_default`. Local runs default to six stocks. Future multiplayer setup may choose the same count before the authoritative state is created; the UI does not create, copy, or mutate stock data.
+
 ### `DayTimer`
 
 A small application component that owns elapsed time for the active trading window.
@@ -293,7 +296,7 @@ DEBRIEF
 ```text
 Main scene
   -> TradingSession.start_run(seed)
-  -> GameState created with £10,000
+  -> GameState created with £1,000
   -> Stock catalog created
   -> MarketSimulator.generate_projections(state)
   -> UI receives run_started and projection_updated
@@ -384,7 +387,7 @@ Contains the active trading interface:
 - Header and currency summary.
 - Day and countdown display.
 - Stock list.
-- Selected-stock chart.
+- Shared live multi-stock chart and text legend.
 - Buy/sell controls.
 - Projection and news display.
 - Trade feedback.
@@ -401,7 +404,7 @@ The simulation and application layers should be testable without launching the f
 
 ### Unit tests
 
-- Starting cash is £10,000.
+- Starting cash is £1,000.
 - A valid buy decreases cash and increases shares.
 - A valid sell increases cash and decreases shares.
 - Overspending is rejected.
@@ -412,14 +415,16 @@ The simulation and application layers should be testable without launching the f
 - The timer resolves a day once.
 - The final day liquidates all holdings.
 - The same seed produces the same projections and resolutions.
+- A configured stock count preserves the first N default stocks and produces the same seeded results for the same N.
 - Different seeds can produce different runs.
 
 ### Integration tests
 
-- Starting a session creates six stocks and a first projection.
+- Starting a session creates six stocks and a first projection by default.
+- A configured session creates the requested bounded stock count in stable catalog order.
 - Timer expiry causes resolution and enters DEBRIEF; Next Day starts the next 30-second round.
 - A complete run reaches `COMPLETE` without manual end-day input.
-- The dashboard refreshes after a successful trade.
+- The dashboard refreshes rows, legend prices, and all chart lines after a successful trade or live sample.
 - The summary appears after final liquidation.
 
 ### Manual play checks
