@@ -47,3 +47,28 @@ func test_invalid_trades_do_not_change_state() -> void:
 	var outside_phase: Dictionary = service.buy(state, "AUR", 1)
 	assert_false(outside_phase["success"])
 	assert_eq(state.cash_pence, starting_cash)
+
+func test_pump_requires_trading_phase_and_costs_fixed_cash() -> void:
+	var state: GameState = GAME_STATE.new(123, 3)
+	var service: TradeService = TRADE_SERVICE.new()
+	var outside_phase: Dictionary = service.pump(state, "AUR")
+	assert_false(outside_phase["success"])
+	assert_eq(state.cash_pence, state.starting_cash_pence)
+	state.phase = GAME_STATE.Phase.TRADING
+	var starting_cash := state.cash_pence
+	var result: Dictionary = service.pump(state, "AUR")
+	assert_true(result["success"])
+	assert_eq(result["cost_pence"], GameState.PUMP_COST_PENCE)
+	assert_eq(state.cash_pence, starting_cash - GameState.PUMP_COST_PENCE)
+	assert_true(result["correction_risk"])
+
+func test_pump_is_once_per_stock_and_never_makes_cash_negative() -> void:
+	var state: GameState = GAME_STATE.new(123, 3)
+	state.phase = GAME_STATE.Phase.TRADING
+	var service: TradeService = TRADE_SERVICE.new()
+	var first: Dictionary = service.pump(state, "AUR")
+	var second: Dictionary = service.pump(state, "AUR")
+	assert_true(first["success"])
+	assert_false(second["success"])
+	assert_eq(state.cash_pence, state.starting_cash_pence - GameState.PUMP_COST_PENCE)
+	assert_true(state.cash_pence >= 0)

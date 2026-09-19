@@ -2,6 +2,8 @@ class_name MarketSimulator
 extends RefCounted
 
 const PRICE_FLOOR_PENCE: int = 100
+const PUMP_CORRECTION_CHANCE: float = 0.65
+const PUMP_CORRECTION_PERCENT: float = 0.08
 
 var random: RandomNumberGenerator = RandomNumberGenerator.new()
 var seed: int
@@ -35,6 +37,8 @@ func update_live_prices(state: GameState, progress: float) -> Array[Dictionary]:
 	var clamped_progress := clampf(progress, 0.0, 1.0)
 	for stock in state.stocks:
 		var target_price := maxi(PRICE_FLOOR_PENCE, stock.projected_price_pence)
+		if stock.pump_active:
+			target_price = maxi(PRICE_FLOOR_PENCE, roundi(float(target_price) * (1.0 + stock.pump_live_boost)))
 		var path_price := lerpf(float(stock.round_open_price_pence), float(target_price), clamped_progress)
 		var live_noise := random.randf_range(-stock.volatility * 0.10, stock.volatility * 0.10)
 		var live_price := maxi(PRICE_FLOOR_PENCE, roundi(path_price * (1.0 + live_noise)))
@@ -55,6 +59,12 @@ func resolve_day(state: GameState) -> Array[Dictionary]:
 		var opening_price_pence := stock.round_open_price_pence
 		var resolution_noise := random.randf_range(-stock.volatility * 0.35, stock.volatility * 0.35)
 		var actual_change := stock.projection_change + resolution_noise
+		var pump_correction := false
+		var pump_correction_percent := 0.0
+		if stock.pump_active:
+			pump_correction = random.randf() < PUMP_CORRECTION_CHANCE
+			pump_correction_percent = PUMP_CORRECTION_PERCENT if pump_correction else 0.02
+			actual_change -= pump_correction_percent
 		var next_price := maxi(PRICE_FLOOR_PENCE, roundi(float(opening_price_pence) * (1.0 + actual_change)))
 		stock.append_resolved_price(next_price)
 		var percentage_change := float(next_price - opening_price_pence) / float(opening_price_pence)
@@ -64,6 +74,9 @@ func resolve_day(state: GameState) -> Array[Dictionary]:
 			"closing_price_pence": stock.current_price_pence,
 			"percentage_change": percentage_change,
 			"news": stock.current_news,
+			"pump_used": stock.pump_active,
+			"pump_correction": pump_correction,
+			"pump_correction_percent": pump_correction_percent,
 		})
 	if state.current_day >= state.total_days:
 		state.phase = GameState.Phase.COMPLETE

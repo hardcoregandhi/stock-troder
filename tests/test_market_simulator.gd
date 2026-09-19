@@ -3,6 +3,7 @@ extends McpTestSuite
 
 const GAME_STATE = preload("res://scripts/simulation/game_state.gd")
 const MARKET_SIMULATOR = preload("res://scripts/simulation/market_simulator.gd")
+const TRADE_SERVICE = preload("res://scripts/application/trade_service.gd")
 
 func suite_name() -> String:
 	return "market_simulator"
@@ -63,6 +64,35 @@ func test_same_seed_matches_projections_live_samples_and_resolution() -> void:
 	second_simulator.update_live_prices(second_state, 0.5)
 	assert_eq(_prices(first_state), _prices(second_state))
 	assert_eq(first_simulator.resolve_day(first_state), second_simulator.resolve_day(second_state))
+
+func test_pump_changes_live_price_path() -> void:
+	var normal_state = GAME_STATE.new(515, 2)
+	var pumped_state = GAME_STATE.new(515, 2)
+	var normal_simulator = MARKET_SIMULATOR.new(515)
+	var pumped_simulator = MARKET_SIMULATOR.new(515)
+	normal_simulator.prepare_day(normal_state)
+	pumped_simulator.prepare_day(pumped_state)
+	var pump_result := TRADE_SERVICE.new().pump(pumped_state, "AUR")
+	assert_true(pump_result["success"])
+	normal_simulator.update_live_prices(normal_state, 0.75)
+	pumped_simulator.update_live_prices(pumped_state, 0.75)
+	assert_gt(pumped_state.get_stock("AUR").current_price_pence, normal_state.get_stock("AUR").current_price_pence)
+
+func test_pumped_resolution_is_seeded_and_reports_correction() -> void:
+	var first_state = GAME_STATE.new(616, 2)
+	var second_state = GAME_STATE.new(616, 2)
+	var first_simulator = MARKET_SIMULATOR.new(616)
+	var second_simulator = MARKET_SIMULATOR.new(616)
+	first_simulator.prepare_day(first_state)
+	second_simulator.prepare_day(second_state)
+	assert_true(TRADE_SERVICE.new().pump(first_state, "AUR")["success"])
+	assert_true(TRADE_SERVICE.new().pump(second_state, "AUR")["success"])
+	var first_resolutions := first_simulator.resolve_day(first_state)
+	var second_resolutions := second_simulator.resolve_day(second_state)
+	assert_eq(first_resolutions, second_resolutions)
+	var aur_resolution: Dictionary = first_resolutions[0]
+	assert_true(aur_resolution.has("pump_correction"))
+	assert_true(aur_resolution["pump_used"])
 
 func _prices(state) -> Array[int]:
 	var prices: Array[int] = []

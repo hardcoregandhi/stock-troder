@@ -11,6 +11,7 @@ The architecture is designed around a deterministic single-player prototype firs
 - Keep game rules independent from visual presentation.
 - Give each system one clear responsibility.
 - Keep all money, holdings, prices, and trade validation in the simulation layer.
+- Keep manipulation rules in the simulation and application layers; the UI only requests Pump and displays its result.
 - Let the UI display state and request actions; it must not change game rules directly.
 - Use signals for meaningful state changes instead of tightly coupling every UI control to every system.
 - Use seeded randomness so runs can be reproduced during development and tested reliably.
@@ -211,6 +212,12 @@ shares_after_trade: int
 
 Phase 1 has no transaction fee, but the result structure should leave room for one later.
 
+#### Phase 1.5 Pump boundary
+
+`TradeService.pump(state, symbol)` validates the `TRADING` phase, stock symbol, once-per-round usage, and the fixed 25,000 pence cost. It marks the stock as pumped and returns a structured result with `success`, `message`, `symbol`, `cost_pence`, `cash_after_action`, `live_boost`, `correction_risk`, and `pump_active`.
+
+`StockData` stores the temporary round Pump state. `MarketSimulator` applies the 4% short-term live path boost and uses its seeded random generator at resolution for the 65% 8% correction risk or 35% 2% correction. The resolution record includes `pump_used`, `pump_correction`, and `pump_correction_percent`. `GameState.reset_round_manipulations()` clears usage when `TradingSession.continue_to_next_day()` starts the next round.
+
 ### `TradingSession`
 
 Coordinates the complete run lifecycle.
@@ -271,6 +278,7 @@ DEBRIEF
 ### State rules
 
 - Buy and sell requests are accepted only during `TRADING`.
+- Pump requests are accepted only during `TRADING`, once per stock per round, and only when cash covers the fixed cost.
 - Projections are generated during `PREPARING` and remain fixed during `TRADING`.
 - Prices update during `TRADING` at the configured market sample interval. A market sample is not a new day.
 - The timer is stopped during `RESOLVING`.
@@ -302,6 +310,17 @@ Buy/Sell button
   -> GameState applies approved trade
   -> TradingSession emits state_changed and trade_completed
   -> UI refreshes cash, holdings, and portfolio value
+```
+
+### Executing Pump
+
+```text
+Pump button
+  -> TradingDashboard calls TradingSession.pump(symbol)
+  -> TradeService validates and charges the cost
+  -> StockData stores the temporary live boost
+  -> TradingSession emits pump_completed or pump_rejected
+  -> UI refreshes availability, cash, and feedback
 ```
 
 ### Resolving a day

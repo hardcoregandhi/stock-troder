@@ -2,6 +2,7 @@
 
 ## Immediate Agent instructions
 - Use NASA plain language in all docs, code, comments, and replies. Avoid complex verbose explanations.
+- No work should be left uncommitted in VCS.
 
 ## Project Context
 

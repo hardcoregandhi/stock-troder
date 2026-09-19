@@ -7,6 +7,8 @@ signal time_updated(seconds_remaining: float)
 signal market_updated(state_snapshot: Dictionary)
 signal trade_completed(trade_result: Dictionary)
 signal trade_rejected(trade_result: Dictionary)
+signal pump_completed(pump_result: Dictionary)
+signal pump_rejected(pump_result: Dictionary)
 signal day_resolved(day_number: int, resolution_result: Array[Dictionary], state_snapshot: Dictionary)
 signal run_completed(summary: Dictionary)
 
@@ -44,11 +46,20 @@ func buy(symbol: String, quantity: int) -> Dictionary:
 func sell(symbol: String, quantity: int) -> Dictionary:
 	return _execute_trade(trade_service.sell(game_state, symbol, quantity))
 
+func pump(symbol: String) -> Dictionary:
+	var result := trade_service.pump(game_state, symbol)
+	if result["success"]:
+		pump_completed.emit(result)
+	else:
+		pump_rejected.emit(result)
+	return result
+
 func continue_to_next_day() -> bool:
 	if game_state == null or game_state.phase != GameState.Phase.DEBRIEF:
 		return false
 	game_state.current_day += 1
 	game_state.phase = GameState.Phase.PREPARING
+	game_state.reset_round_manipulations()
 	_prepare_day()
 	return true
 
@@ -66,6 +77,7 @@ func state_snapshot() -> Dictionary:
 			"projection_high": stock.projection_high,
 			"current_news": stock.current_news,
 			"shares": int(game_state.holdings[stock.symbol]),
+			"pump_used": game_state.has_pumped(stock.symbol),
 		})
 	return {
 		"day": game_state.current_day,

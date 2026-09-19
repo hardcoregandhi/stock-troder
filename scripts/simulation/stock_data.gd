@@ -20,6 +20,8 @@ var projection_confidence: String = ""
 var current_news: String = ""
 var news_impact: float = 0.0
 var projected_price_pence: int = 0
+var pump_active: bool = false
+var pump_live_boost: float = 0.0
 
 func _init(
 	stock_symbol: String,
@@ -73,6 +75,8 @@ func set_projection(change: float, low: float, high: float, news: String, impact
 	round_open_price_pence = current_price_pence
 	live_price_history_pence.clear()
 	live_price_history_pence.append(current_price_pence)
+	pump_active = false
+	pump_live_boost = 0.0
 	projection_change = change
 	projection_low = low
 	projection_high = high
@@ -91,6 +95,14 @@ func append_resolved_price(price_pence: int) -> void:
 	current_price_pence = maxi(100, price_pence)
 	price_history_pence.append(current_price_pence)
 	live_price_history_pence.append(current_price_pence)
+
+func activate_pump(live_boost: float) -> void:
+	pump_active = true
+	pump_live_boost = live_boost
+
+func clear_pump() -> void:
+	pump_active = false
+	pump_live_boost = 0.0
 
 func graph_history_pence() -> Array[int]:
 	var history: Array[int] = price_history_pence.duplicate()

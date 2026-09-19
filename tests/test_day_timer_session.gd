@@ -79,6 +79,18 @@ func test_non_final_resolution_contains_debrief_data() -> void:
 		assert_true(resolution.has("percentage_change"))
 		assert_true(resolution.has("news"))
 
+func test_next_day_resets_pump_usage() -> void:
+	var session: TradingSession = _new_session()
+	session.start_run(15, 2)
+	var pump_result := session.pump("AUR")
+	assert_true(pump_result["success"])
+	session._on_day_timer_timed_out()
+	assert_eq(session.game_state.phase, GAME_STATE.Phase.DEBRIEF)
+	assert_true(session.game_state.has_pumped("AUR"))
+	assert_true(session.continue_to_next_day())
+	assert_false(session.game_state.has_pumped("AUR"))
+	assert_true(session.pump("AUR")["success"])
+
 func _new_session() -> TradingSession:
 	var session: TradingSession = TRADING_SESSION.new()
 	track(session)

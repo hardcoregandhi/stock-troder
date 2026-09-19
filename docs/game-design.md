@@ -11,7 +11,7 @@ The appeal comes from making decisions under incomplete information:
 - The player chooses when to hold, buy, or sell.
 - A short day limit forces the player to act instead of waiting forever.
 
-The first playable version should make the buy/sell/beat-the-clock loop enjoyable before adding sabotage, pumping, or networking.
+The first playable version should make the buy/sell/beat-the-clock loop enjoyable before adding sabotage or networking. Phase 1.5 adds one limited Pump action without adding multiplayer or sabotage.
 
 ## 2. Product Goals
 
@@ -25,6 +25,10 @@ The first playable version should make the buy/sell/beat-the-clock loop enjoyabl
 - Show a simple historical price graph for each stock.
 - Calculate portfolio value and final profit/loss.
 - Provide a clear end-of-run result and a way to start again.
+
+### Phase 1.5 goal
+
+- Add a risky Pump action for one selected stock during a live trading round.
 
 ### Later goals
 
@@ -124,6 +128,7 @@ The player begins with:
 - Cash: £10,000.
 - Shares: 0 in every stock.
 - Trading fee: none for the first prototype.
+- Pump cost: **£250.00 (25,000 pence)** per use. This is 2.5% of the £10,000 starting cash, so it matters but does not block normal trading.
 
 Rules:
 
@@ -136,6 +141,12 @@ Rules:
 - Final profit/loss equals final liquidation cash minus starting cash.
 
 A small transaction fee can be added after the basic loop works, but it should not obscure whether the market simulation is fun.
+
+### Phase 1.5 Pump
+
+Pump is a single-player action available only during `TRADING`. It targets the selected stock and costs £250.00 immediately. Each stock can be pumped once per round. A successful Pump lifts that stock's short-term live price path by 4%, but the round resolution applies a correction risk: there is a seeded 65% chance of an 8% correction and a 35% chance of a smaller 2% correction. The result is never a guaranteed profit, and the normal £1.00 price floor still applies.
+
+The player can see the cost, availability, and correction risk in the dashboard. Pump usage resets when the player selects **Next Day**. The debrief reports whether a Pump correction affected the resolved result.
 
 ## 6. Information and UI
 

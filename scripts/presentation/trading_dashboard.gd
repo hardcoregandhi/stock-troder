@@ -25,6 +25,8 @@ var detail_news: Label
 var detail_shares: Label
 var trade_feedback: Label
 var quantity: SpinBox
+var pump_button: Button
+var pump_status: Label
 var chart: StockHistoryChart
 var summary_panel: PanelContainer
 var summary_layer: Control
@@ -86,6 +88,8 @@ func setup(new_session: TradingSession) -> void:
 	session.day_resolved.connect(_on_day_resolved)
 	session.trade_completed.connect(_on_trade_result)
 	session.trade_rejected.connect(_on_trade_result)
+	session.pump_completed.connect(_on_trade_result)
+	session.pump_rejected.connect(_on_trade_result)
 	session.run_completed.connect(_on_run_completed)
 
 func _build_ui() -> void:
@@ -215,6 +219,18 @@ func _build_detail_panel() -> Control:
 	trade_feedback = _label("Select a stock and place a trade.", 12, MUTED)
 	trade_feedback.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(trade_feedback)
+	var pump_row := HBoxContainer.new()
+	pump_row.add_theme_constant_override("separation", 8)
+	pump_button = Button.new()
+	pump_button.text = "PUMP"
+	pump_button.tooltip_text = "Spend £250.00 to lift this stock's live path. Correction risk at resolution."
+	pump_button.custom_minimum_size.x = 90
+	pump_button.pressed.connect(_on_pump)
+	pump_row.add_child(pump_button)
+	pump_status = _label("PUMP COST £250.00 | Once per stock per round", 12, MUTED)
+	pump_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	pump_row.add_child(pump_status)
+	content.add_child(pump_row)
 	return panel
 
 func _panel() -> PanelContainer:
@@ -358,6 +374,17 @@ func _update_detail(state: GameState) -> void:
 	detail_projection.add_theme_color_override("font_color", POSITIVE if stock.projection_change >= 0 else NEGATIVE)
 	detail_news.text = "FORECAST NEWS  %s" % stock.current_news
 	detail_shares.text = "Shares held: %d" % int(state.holdings[stock.symbol])
+	if pump_button != null:
+		pump_button.disabled = state.phase != GameState.Phase.TRADING or state.has_pumped(stock.symbol) or state.cash_pence < GameState.PUMP_COST_PENCE
+	if pump_status != null:
+		if state.phase != GameState.Phase.TRADING:
+			pump_status.text = "PUMP UNAVAILABLE outside the trading phase"
+		elif state.has_pumped(stock.symbol):
+			pump_status.text = "PUMP USED for %s this round" % stock.symbol
+		elif state.cash_pence < GameState.PUMP_COST_PENCE:
+			pump_status.text = "PUMP UNAVAILABLE | Need £250.00 cash"
+		else:
+			pump_status.text = "PUMP COST £250.00 | Once per stock per round"
 	chart.set_values(stock.graph_history_pence())
 
 func _select_stock(symbol: String) -> void:
@@ -377,6 +404,9 @@ func _on_buy_detail() -> void:
 
 func _on_sell_detail() -> void:
 	session.sell(selected_symbol, int(quantity.value))
+
+func _on_pump() -> void:
+	session.pump(selected_symbol)
 
 func _show_debrief(day: int, resolutions: Array[Dictionary]) -> void:
 	if debrief_panel != null:
@@ -405,12 +435,13 @@ func _show_debrief(day: int, resolutions: Array[Dictionary]) -> void:
 		var change := float(resolution["percentage_change"]) * 100.0
 		var change_color := POSITIVE if change >= 0.0 else NEGATIVE
 		var row := _label(
-			"%s  %s -> %s  %+.1f%%\nRESOLVED NEWS  %s" % [
+			"%s  %s -> %s  %+.1f%%\nRESOLVED NEWS  %s%s" % [
 				resolution["symbol"],
 				_format_pence(int(resolution["opening_price_pence"])),
 				_format_pence(int(resolution["closing_price_pence"])),
 				change,
 				resolution["news"],
+				"\nPUMP CORRECTION AFFECTED RESULT" if bool(resolution.get("pump_correction", false)) else ("\nPUMP RESOLVED WITHOUT CORRECTION" if bool(resolution.get("pump_used", false)) else ""),
 			],
 			12,
 			change_color,

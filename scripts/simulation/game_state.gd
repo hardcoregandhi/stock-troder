@@ -11,6 +11,7 @@ enum Phase {
 
 const STARTING_CASH_PENCE: int = 1_000_000
 const DEFAULT_TOTAL_DAYS: int = 10
+const PUMP_COST_PENCE: int = 25_000
 
 var starting_cash_pence: int = STARTING_CASH_PENCE
 var cash_pence: int = STARTING_CASH_PENCE
@@ -19,6 +20,7 @@ var total_days: int = DEFAULT_TOTAL_DAYS
 var phase: Phase = Phase.PREPARING
 var stocks: Array[StockData] = []
 var holdings: Dictionary = {}
+var pumped_symbols: Dictionary = {}
 var seed: int
 
 const TRADE_SERVICE = preload("res://scripts/application/trade_service.gd")
@@ -54,6 +56,17 @@ func apply_sell_shares(symbol: String, quantity: int) -> void:
 	var stock := get_stock(symbol)
 	cash_pence += stock.current_price_pence * quantity
 	holdings[symbol] -= quantity
+
+func mark_pumped(symbol: String) -> void:
+	pumped_symbols[symbol] = true
+
+func has_pumped(symbol: String) -> bool:
+	return bool(pumped_symbols.get(symbol, false))
+
+func reset_round_manipulations() -> void:
+	pumped_symbols.clear()
+	for stock in stocks:
+		stock.clear_pump()
 
 func portfolio_value_pence() -> int:
 	var value := cash_pence
