@@ -131,7 +131,7 @@ GameState
   cash: int
   current_day: int
   total_days: int
-  phase: enum { PREPARING, TRADING, RESOLVING, COMPLETE }
+  phase: enum { PREPARING, TRADING, RESOLVING, DEBRIEF, COMPLETE }
   stocks: Array[StockData]
   holdings: Dictionary[String, int]
   seed: int
@@ -170,15 +170,18 @@ Generates and resolves market behavior using a seeded `RandomNumberGenerator`.
 Responsibilities:
 
 - Generate daily market events.
-- Generate each stock's pre-day projection.
-- Resolve actual movement when the trading timer expires.
+- Generate each stock's pre-round projection.
+- Update live prices at the configured market sample interval.
+- Resolve the final movement when the 30-second round timer expires.
 - Apply price floors.
-- Append resolved prices to history.
+- Append live samples and resolved prices to history.
 - Return a resolution result for the UI.
 
 It should not know about buttons, labels, scene nodes, or player input.
 
 The simulator should keep projection randomness separate from resolution noise. This allows the displayed forecast to be useful without making the final price perfectly predictable.
+
+The simulator should keep the round opening price separate from the current live price. Live movement must not turn each sample into a new trading day or compound the final projection accidentally.
 
 ### `TradeService`
 
@@ -216,10 +219,11 @@ Responsibilities:
 - Create a fresh `GameState`.
 - Initialize the stock catalog.
 - Start the first trading day.
-- Start and monitor the 10-second timer.
+- Start and monitor the 30-second timer.
 - Route buy and sell requests to `TradeService`.
 - Resolve the market when the timer expires.
-- Start the next day automatically.
+- Pause after a resolved round and wait for a Next Day command.
+- Start the next day when the player leaves the debrief.
 - Liquidate holdings after the final day.
 - Emit run-complete data.
 
@@ -231,7 +235,7 @@ A small application component that owns elapsed time for the active trading wind
 
 Responsibilities:
 
-- Start at 10.0 seconds.
+- Start at 30.0 seconds.
 - Count down using frame delta or a Godot `Timer`.
 - Emit remaining-time updates for the clock UI.
 - Emit one timeout event when the window ends.
@@ -253,8 +257,12 @@ TRADING
 RESOLVING
     |
     | resolve prices, append history, recalculate value
+  v
+DEBRIEF
     |
-    +---- current_day < total_days ----> PREPARING
+  | player selects Next Day
+  |
+  +---- current_day < total_days ----> PREPARING
     |
     +---- current_day = total_days ----> COMPLETE
 ```
@@ -263,9 +271,10 @@ RESOLVING
 
 - Buy and sell requests are accepted only during `TRADING`.
 - Projections are generated during `PREPARING` and remain fixed during `TRADING`.
-- Prices remain at their current values during `TRADING` in Phase 1; the market moves when the window resolves.
+- Prices update during `TRADING` at the configured market sample interval. A market sample is not a new day.
 - The timer is stopped during `RESOLVING`.
-- The player cannot trade during `RESOLVING` or `COMPLETE`.
+- The player cannot trade during `RESOLVING`, `DEBRIEF`, or `COMPLETE`.
+- The next day's projections are not generated until the player selects Next Day from the debrief.
 - The final result is calculated only after final liquidation.
 
 ## 7. Main Data Flow
@@ -303,8 +312,18 @@ DayTimer.timeout
   -> GameState appends prices and updates current values
   -> TradingSession recalculates portfolio value
   -> UI shows resolution feedback
-  -> If more days remain: generate projections and restart timer
+  -> If more days remain: enter DEBRIEF and wait for the player
   -> Otherwise: liquidate holdings and complete the run
+
+### Leaving a debrief
+
+```text
+Next Day button
+  -> TradingSession.continue_to_next_day()
+  -> GameState advances the day and enters PREPARING
+  -> MarketSimulator generates the next projection and news
+  -> DayTimer starts a new 30-second round
+```
 ```
 
 ## 8. Signals and Contracts
@@ -432,7 +451,7 @@ The deterministic seed remains useful for debugging and replay, but multiplayer 
 
 ### Deferred
 
-- Whether prices move continuously during the 10-second window.
+- Whether the 30-second round should be shortened or lengthened after playtesting.
 - Whether forecasts are shown as percentages, price ranges, or both.
 - Save-game format.
 - Manipulation resource and detection rules.

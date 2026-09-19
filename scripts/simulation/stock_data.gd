@@ -6,7 +6,9 @@ var company_name: String
 var personality: String
 var current_price_pence: int
 var previous_price_pence: int
+var round_open_price_pence: int
 var price_history_pence: Array[int] = []
+var live_price_history_pence: Array[int] = []
 var volatility: float
 var trend: float
 var news_events: Array[Dictionary] = []
@@ -33,6 +35,7 @@ func _init(
 	personality = stock_personality
 	current_price_pence = initial_price_pence
 	previous_price_pence = initial_price_pence
+	round_open_price_pence = initial_price_pence
 	price_history_pence.append(initial_price_pence)
 	volatility = stock_volatility
 	trend = stock_trend
@@ -67,6 +70,9 @@ static func create_default_catalog() -> Array[StockData]:
 	]
 
 func set_projection(change: float, low: float, high: float, news: String, impact: float) -> void:
+	round_open_price_pence = current_price_pence
+	live_price_history_pence.clear()
+	live_price_history_pence.append(current_price_pence)
 	projection_change = change
 	projection_low = low
 	projection_high = high
@@ -76,10 +82,21 @@ func set_projection(change: float, low: float, high: float, news: String, impact
 	news_impact = impact
 	projected_price_pence = maxi(100, roundi(float(current_price_pence) * (1.0 + change)))
 
+func set_live_price(price_pence: int) -> void:
+	current_price_pence = maxi(100, price_pence)
+	live_price_history_pence.append(current_price_pence)
+
 func append_resolved_price(price_pence: int) -> void:
 	previous_price_pence = current_price_pence
 	current_price_pence = maxi(100, price_pence)
 	price_history_pence.append(current_price_pence)
+	live_price_history_pence.append(current_price_pence)
+
+func graph_history_pence() -> Array[int]:
+	var history: Array[int] = price_history_pence.duplicate()
+	for index in range(1, live_price_history_pence.size()):
+		history.append(live_price_history_pence[index])
+	return history
 
 func _confidence_label() -> String:
 	if volatility <= 0.03:

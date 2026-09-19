@@ -5,6 +5,7 @@ enum Phase {
 	PREPARING,
 	TRADING,
 	RESOLVING,
+	DEBRIEF,
 	COMPLETE,
 }
 

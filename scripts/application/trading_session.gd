@@ -4,18 +4,21 @@ extends Node
 signal run_started(state_snapshot: Dictionary)
 signal day_prepared(day_number: int, projections: Array[Dictionary], news: Array[Dictionary])
 signal time_updated(seconds_remaining: float)
+signal market_updated(state_snapshot: Dictionary)
 signal trade_completed(trade_result: Dictionary)
 signal trade_rejected(trade_result: Dictionary)
 signal day_resolved(day_number: int, resolution_result: Array[Dictionary], state_snapshot: Dictionary)
 signal run_completed(summary: Dictionary)
 
 const DEFAULT_SEED: int = 42_4242
-const DAY_LENGTH_SECONDS: float = 10.0
+const DAY_LENGTH_SECONDS: float = 30.0
+const MARKET_SAMPLE_INTERVAL_SECONDS: float = 0.5
 
 var game_state: GameState
 var market_simulator: MarketSimulator
 var trade_service: TradeService
 var day_timer: DayTimer
+var market_sample_elapsed: float = 0.0
 
 func _ready() -> void:
 	day_timer = DayTimer.new()
@@ -31,6 +34,7 @@ func start_run(run_seed: int = DEFAULT_SEED, run_total_days: int = GameState.DEF
 	game_state = GameState.create_default(run_seed, run_total_days)
 	market_simulator = MarketSimulator.new(run_seed)
 	trade_service = TradeService.new()
+	market_sample_elapsed = 0.0
 	run_started.emit(state_snapshot())
 	_prepare_day()
 
@@ -39,6 +43,14 @@ func buy(symbol: String, quantity: int) -> Dictionary:
 
 func sell(symbol: String, quantity: int) -> Dictionary:
 	return _execute_trade(trade_service.sell(game_state, symbol, quantity))
+
+func continue_to_next_day() -> bool:
+	if game_state == null or game_state.phase != GameState.Phase.DEBRIEF:
+		return false
+	game_state.current_day += 1
+	game_state.phase = GameState.Phase.PREPARING
+	_prepare_day()
+	return true
 
 func state_snapshot() -> Dictionary:
 	if game_state == null:
@@ -66,12 +78,23 @@ func state_snapshot() -> Dictionary:
 	}
 
 func _prepare_day() -> void:
+	market_sample_elapsed = 0.0
 	var projections := market_simulator.prepare_day(game_state)
 	var news: Array[Dictionary] = []
 	for projection in projections:
 		news.append({"symbol": projection["symbol"], "text": projection["news"]})
 	day_prepared.emit(game_state.current_day, projections, news)
 	day_timer.start(DAY_LENGTH_SECONDS)
+
+func _process(delta: float) -> void:
+	if game_state == null or game_state.phase != GameState.Phase.TRADING or not day_timer.running:
+		return
+	market_sample_elapsed += delta
+	while market_sample_elapsed >= MARKET_SAMPLE_INTERVAL_SECONDS:
+		market_sample_elapsed -= MARKET_SAMPLE_INTERVAL_SECONDS
+		var progress := 1.0 - (day_timer.seconds_remaining / DAY_LENGTH_SECONDS)
+		market_simulator.update_live_prices(game_state, progress)
+		market_updated.emit(state_snapshot())
 
 func _on_day_timer_timed_out() -> void:
 	if game_state == null or game_state.phase != GameState.Phase.TRADING:
@@ -85,7 +108,6 @@ func _on_day_timer_timed_out() -> void:
 	if is_final_day:
 		_emit_run_completed()
 		return
-	_prepare_day()
 
 func _on_time_updated(seconds_remaining: float) -> void:
 	time_updated.emit(seconds_remaining)

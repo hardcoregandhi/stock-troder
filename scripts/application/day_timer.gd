@@ -4,11 +4,11 @@ extends Node
 signal time_updated(seconds_remaining: float)
 signal timed_out
 
-var duration_seconds: float = 10.0
+var duration_seconds: float = 30.0
 var seconds_remaining: float = 0.0
 var running: bool = false
 
-func start(new_duration_seconds: float = 10.0) -> void:
+func start(new_duration_seconds: float = 30.0) -> void:
 	duration_seconds = maxf(0.1, new_duration_seconds)
 	seconds_remaining = duration_seconds
 	running = true

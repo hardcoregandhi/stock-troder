@@ -6,7 +6,7 @@
 ## Project Context
 
 - This is a Godot 4.7.2 project named `StockTroder`.
-- The game is a single-player stock trading prototype with 10-second trading windows, automatic day progression, fictional stocks, and pound-denominated currency.
+- The game is a single-player stock trading prototype with 30-second live trading rounds, price updates about twice per second, automatic day progression, fictional stocks, and pound-denominated currency.
 - Read `docs/game-design.md` for player-facing rules and `docs/architecture.md` for software boundaries before making structural changes.
 
 ## Godot Access and Validation
@@ -22,5 +22,5 @@
 - Keep simulation rules independent from UI nodes.
 - Store currency internally as integer pence and format it as pounds in the UI.
 - Keep seeded market simulation deterministic for repeatable tests.
-- Do not add manual end-day input; days resolve automatically when the 10-second timer expires.
+- Do not add manual end-day input; days resolve automatically when the 30-second timer expires.
 - Do not add multiplayer or market manipulation until the Phase 1 single-player loop is playable.
