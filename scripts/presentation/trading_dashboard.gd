@@ -125,10 +125,14 @@ func _build_ui() -> void:
 	margin.add_child(page)
 	page.add_child(_build_header())
 	page.add_child(_build_status_bar())
+	var body_scroll := ScrollContainer.new()
+	body_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	body_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	page.add_child(body_scroll)
 	var body := HBoxContainer.new()
-	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	body.custom_minimum_size.y = 470
 	body.add_theme_constant_override("separation", 14)
-	page.add_child(body)
+	body_scroll.add_child(body)
 	body.add_child(_build_market_panel())
 	body.add_child(_build_detail_panel())
 
@@ -183,7 +187,7 @@ func _build_market_panel() -> Control:
 	content.add_child(_label("LIVE MARKET", 13, MUTED))
 	content.add_child(_label("All configured stocks. Select a row for detail, or trade one share now.", 12, MUTED))
 	chart = StockHistoryChart.new()
-	chart.custom_minimum_size.y = 178
+	chart.custom_minimum_size.y = 135
 	chart.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	content.add_child(chart)
 	chart_legend = FlowContainer.new()
