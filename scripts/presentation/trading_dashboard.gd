@@ -268,6 +268,26 @@ func _label(text: String, font_size: int, color: Color) -> Label:
 	label.add_theme_color_override("font_color", color)
 	return label
 
+func _forward_button(text: String, minimum_size: Vector2) -> Button:
+	var button := Button.new()
+	button.text = text
+	button.custom_minimum_size = minimum_size
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = Color("315f4d")
+	normal.corner_radius_top_left = 5
+	normal.corner_radius_top_right = 5
+	normal.corner_radius_bottom_left = 5
+	normal.corner_radius_bottom_right = 5
+	var hover := normal.duplicate()
+	hover.bg_color = Color("3d7960")
+	var pressed := normal.duplicate()
+	pressed.bg_color = Color("244838")
+	button.add_theme_stylebox_override("normal", normal)
+	button.add_theme_stylebox_override("hover", hover)
+	button.add_theme_stylebox_override("pressed", pressed)
+	button.add_theme_color_override("font_color", TEXT)
+	return button
+
 func _build_stock_header() -> void:
 	for header in [
 		_column_label("SYMBOL", 50),
@@ -625,9 +645,7 @@ func _show_debrief(day: int, resolutions: Array[Dictionary]) -> void:
 	action_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	action_bar.add_child(action_spacer)
 	if session.game_state.phase == GameState.Phase.DEBRIEF:
-		var next_day := Button.new()
-		next_day.text = "NEXT DAY"
-		next_day.custom_minimum_size = Vector2(150, 38)
+		var next_day := _forward_button("NEXT DAY", Vector2(150, 38))
 		next_day.pressed.connect(_continue_after_debrief)
 		action_bar.add_child(next_day)
 
@@ -765,9 +783,8 @@ func _show_brief(day: int) -> void:
 	action_bar.custom_minimum_size.y = 42
 	action_bar.alignment = BoxContainer.ALIGNMENT_END
 	content.add_child(action_bar)
-	var start_button := Button.new()
+	var start_button := _forward_button("START TRADING", Vector2(170, 38))
 	start_trading_button = start_button
-	start_button.custom_minimum_size = Vector2(170, 38)
 	start_button.pressed.connect(_start_trading_from_brief)
 	action_bar.add_child(start_button)
 	_update_start_trading_button()
@@ -827,10 +844,13 @@ func _on_run_completed(summary: Dictionary) -> void:
 	content.add_child(_label("Days completed: %d" % int(summary["days_completed"]), 13, MUTED))
 	content.add_child(_label("Final holdings: %s" % _holdings_text_from_dictionary(summary.get("holdings", {})), 13, TEXT))
 	content.add_child(_build_rankings_panel(summary.get("ranking", [])))
-	var restart := Button.new()
-	restart.text = "RESTART"
+	var action_bar := HBoxContainer.new()
+	action_bar.custom_minimum_size.y = 42
+	action_bar.alignment = BoxContainer.ALIGNMENT_END
+	content.add_child(action_bar)
+	var restart := _forward_button("RESTART", Vector2(150, 38))
 	restart.pressed.connect(_restart_run)
-	content.add_child(restart)
+	action_bar.add_child(restart)
 
 func _restart_run() -> void:
 	if debrief_layer != null:

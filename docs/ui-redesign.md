@@ -164,6 +164,15 @@ Single-player should show:
 
 The player should not need to change screens to compare stocks.
 
+## 7.1 Forward Action Pattern
+
+Forward actions use one consistent rule:
+
+- Place `START TRADING`, `NEXT DAY`, `CONTINUE`, and `RESTART` in a bottom-right action bar.
+- Use a subtle green style to show that the action moves the game forward.
+- Keep Back, Exit, and Cancel separate from the forward action.
+- Keep the action visible without scrolling.
+
 ## 8. Multiplayer View
 
 The market graph and stock rows remain shared.
