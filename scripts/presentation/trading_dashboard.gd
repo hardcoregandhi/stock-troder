@@ -34,12 +34,12 @@ var summary_panel: PanelContainer
 var summary_layer: Control
 var debrief_panel: PanelContainer
 var debrief_layer: Control
-	var brief_panel: PanelContainer
-	var brief_layer: Control
-	var debrief_chart: StockHistoryChart
-	var debrief_chart_tabs: HBoxContainer
-	var debrief_day_series: Array[Dictionary] = []
-	var debrief_game_series: Array[Dictionary] = []
+var brief_panel: PanelContainer
+var brief_layer: Control
+var debrief_chart: StockHistoryChart
+var debrief_chart_tabs: HBoxContainer
+var debrief_day_series: Array[Dictionary] = []
+var debrief_game_series: Array[Dictionary] = []
 var selected_symbol := "AUR"
 var row_labels: Dictionary = {}
 var news_feed: VBoxContainer

@@ -49,6 +49,8 @@ func test_non_final_timeout_enters_debrief_until_next_day() -> void:
 	assert_eq(session.game_state.phase, GAME_STATE.Phase.DEBRIEF)
 	assert_true(session.continue_to_next_day())
 	assert_eq(session.game_state.current_day, 2)
+	assert_eq(session.game_state.phase, GAME_STATE.Phase.BRIEF)
+	assert_true(session.start_trading_round())
 	assert_eq(session.game_state.phase, GAME_STATE.Phase.TRADING)
 	assert_false(session.continue_to_next_day())
 
@@ -125,6 +127,7 @@ func test_next_day_resets_pump_usage() -> void:
 	assert_true(session.game_state.has_pumped("AUR"))
 	assert_true(session.continue_to_next_day())
 	assert_false(session.game_state.has_pumped("AUR"))
+	assert_true(session.start_trading_round())
 	assert_true(session.pump("AUR")["success"])
 
 func _new_session() -> TradingSession:
