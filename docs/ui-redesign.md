@@ -72,7 +72,7 @@ That is the intended tension.
 
 The graph is the main visual surface. The rows are the action surface. The news feed is the explanation surface.
 
-The current dashboard keeps the graph above the compact stock rows. The selected-stock panel keeps quantity trading and Pump controls, while the news feed shows the latest forecast and resolved headlines in a bounded list so one to six stocks fit at 1152x648.
+The dashboard must fit responsive 16:9 viewports. The graph stays above compact stock rows. Extra information moves to tabs or separate pages rather than scroll bars. The selected-stock panel keeps quantity trading and Pump controls, while the news feed shows the latest forecast and resolved headlines in a bounded list.
 
 ## 4. Shared Market Graph
 
