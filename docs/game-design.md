@@ -21,7 +21,7 @@ The first playable version should make the buy/sell/beat-the-clock loop enjoyabl
 - Show several fictional stocks with current prices, daily movement, and a projection before each trading day begins.
 - Let the player buy and sell whole shares.
 - Give the player a short real-time trading window for each day.
-- Advance through a defined number of trading days automatically when each timer expires.
+- Resolve each 30-second trading round automatically when its timer expires.
 - Show a simple historical price graph for each stock.
 - Calculate portfolio value and final profit/loss.
 - Provide a clear end-of-run result and a way to start again.
@@ -106,7 +106,7 @@ During the round, the market produces a live price sample about every 0.5 second
 live_price = projected_path(progress) + live_noise
 ```
 
-The graph shows these live samples as they arrive. At zero seconds, the final price is resolved, the round closes, and the next day's projection is generated. The next day is a new 30-second round with its own projection and live price path.
+The graph shows these live samples as they arrive. At zero seconds, the final price is resolved and the round enters debrief. After the player selects **Next Day**, the next day's projection is generated and its new 30-second live price path begins.
 
 The exact values should be tuned for fun, but the initial target is:
 
@@ -207,7 +207,7 @@ The UI should react to state changes rather than directly modifying prices, cash
 
 - Implement buy and sell validation.
 - Display holdings and portfolio value.
-- Add the trading countdown and automatic day progression.
+- Add the trading countdown and player-controlled day progression after each debrief.
 - Add final liquidation and run completion.
 
 ### Milestone 3: Dashboard

@@ -172,6 +172,7 @@ Responsibilities:
 - Generate daily market events.
 - Generate each stock's pre-round projection.
 - Update live prices at the configured market sample interval.
+- Produce live price samples about twice per second during a round.
 - Resolve the final movement when the 30-second round timer expires.
 - Apply price floors.
 - Append live samples and resolved prices to history.
@@ -397,7 +398,7 @@ The simulation and application layers should be testable without launching the f
 ### Integration tests
 
 - Starting a session creates six stocks and a first projection.
-- Timer expiry causes resolution and automatically prepares the next day.
+- Timer expiry causes resolution and enters DEBRIEF; Next Day starts the next 30-second round.
 - A complete run reaches `COMPLETE` without manual end-day input.
 - The dashboard refreshes after a successful trade.
 - The summary appears after final liquidation.
@@ -442,8 +443,8 @@ The deterministic seed remains useful for debugging and replay, but multiplayer 
 - Single-player.
 - Six fictional stocks.
 - Ten trading days.
-- Ten-second trading windows.
-- Automatic day progression.
+- 30-second trading windows.
+- Player-controlled progression after each DEBRIEF.
 - Integer pence for internal currency values.
 - Seeded random market simulation.
 - No transaction fees initially.

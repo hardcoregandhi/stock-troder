@@ -52,15 +52,17 @@ func resolve_day(state: GameState) -> Array[Dictionary]:
 	state.phase = GameState.Phase.RESOLVING
 	var resolutions: Array[Dictionary] = []
 	for stock in state.stocks:
+		var opening_price_pence := stock.round_open_price_pence
 		var resolution_noise := random.randf_range(-stock.volatility * 0.35, stock.volatility * 0.35)
 		var actual_change := stock.projection_change + resolution_noise
-		var next_price := maxi(PRICE_FLOOR_PENCE, roundi(float(stock.round_open_price_pence) * (1.0 + actual_change)))
+		var next_price := maxi(PRICE_FLOOR_PENCE, roundi(float(opening_price_pence) * (1.0 + actual_change)))
 		stock.append_resolved_price(next_price)
+		var percentage_change := float(next_price - opening_price_pence) / float(opening_price_pence)
 		resolutions.append({
 			"symbol": stock.symbol,
-			"previous_price_pence": stock.previous_price_pence,
-			"current_price_pence": stock.current_price_pence,
-			"change": actual_change,
+			"opening_price_pence": opening_price_pence,
+			"closing_price_pence": stock.current_price_pence,
+			"percentage_change": percentage_change,
 			"news": stock.current_news,
 		})
 	if state.current_day >= state.total_days:
