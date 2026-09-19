@@ -144,11 +144,17 @@ Rules:
 
 A small transaction fee can be added after the basic loop works, but it should not obscure whether the market simulation is fun.
 
-### Phase 1.5 Pump
+### Phase 1.5 paid manipulation
 
-Pump is a single-player action available only during `TRADING`. It targets the selected stock and costs £25.00 immediately. Each stock can be pumped once per round. A successful Pump lifts that stock's short-term live price path by 4%, but the round resolution applies a correction risk: there is a seeded 65% chance of an 8% correction and a 35% chance of a smaller 2% correction. The result is never a guaranteed profit, and the normal £1.00 price floor still applies.
+Pump is a single-player action available only during `TRADING`. It targets one stock and costs £25.00 immediately. Each stock can be pumped once per round. A Pump lifts that stock's short-term live price path by 4%, but the round resolution applies a seeded correction risk: there is a 65% chance of an 8% correction and a 35% chance of a smaller 2% correction. The result is never a guaranteed profit.
+
+Sabotage is a single-player action available only during `TRADING`. It targets one stock, costs £50.00 immediately, and can be used once per stock per round. It applies -4% pressure to the live path. Resolution also applies a seeded downside of 6% in 65% of cases or 2% in the other cases. The price floor remains £1.00, and sabotage does not guarantee a gain for any portfolio.
+
+Plant Fake News is a single-player action available only during `TRADING`. It targets one stock, costs £75.00 immediately, and can be used once per stock per round. The player chooses positive or negative direction. The action shifts the target's projection and live-path weighting by 3%, and the feed labels the story `PLAYER-PLANTED FAKE`. At resolution, a seeded outcome has a 55% chance to work, a 25% chance to have no effect, and a 20% chance to backfire by applying a 4% movement opposite the chosen direction. It never guarantees price movement.
 
 The player can see the cost, availability, and correction risk in the dashboard. Pump usage resets when the player selects **Next Day**. The debrief reports whether a Pump correction affected the resolved result.
+
+Sabotage and Fake News usage also reset when the player selects **Next Day**. The debrief reports sabotage correction status and whether Fake News worked, failed, or backfired. These actions are not multiplayer mechanics in Phase 1.5; network requests are rejected as single-player-only actions.
 
 ## 6. Information and UI
 

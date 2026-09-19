@@ -4,6 +4,12 @@ extends RefCounted
 const PRICE_FLOOR_PENCE: int = 100
 const PUMP_CORRECTION_CHANCE: float = 0.65
 const PUMP_CORRECTION_PERCENT: float = 0.08
+const SABOTAGE_CORRECTION_CHANCE: float = 0.65
+const SABOTAGE_CORRECTION_PERCENT: float = 0.06
+const SABOTAGE_SMALL_CORRECTION_PERCENT: float = 0.02
+const FAKE_NEWS_SUCCESS_CHANCE: float = 0.55
+const FAKE_NEWS_NO_EFFECT_CHANCE: float = 0.25
+const FAKE_NEWS_BACKFIRE_PERCENT: float = 0.04
 const LIVE_NOISE_VOLATILITY_FACTOR: float = 0.35
 const MAX_LIVE_NOISE: float = 0.04
 
@@ -47,6 +53,10 @@ func update_live_prices(state: GameState, progress: float) -> Array[Dictionary]:
 		var target_price := maxi(PRICE_FLOOR_PENCE, stock.projected_price_pence)
 		if stock.pump_active:
 			target_price = maxi(PRICE_FLOOR_PENCE, roundi(float(target_price) * (1.0 + stock.pump_live_boost)))
+		if stock.sabotage_active:
+			target_price = maxi(PRICE_FLOOR_PENCE, roundi(float(target_price) * (1.0 + stock.sabotage_live_pressure)))
+		if stock.fake_news_active:
+			target_price = maxi(PRICE_FLOOR_PENCE, roundi(float(target_price) * (1.0 + stock.fake_news_projection_weight)))
 		var path_price := lerpf(float(stock.round_open_price_pence), float(target_price), clamped_progress)
 		var live_noise_limit := minf(stock.volatility * LIVE_NOISE_VOLATILITY_FACTOR, MAX_LIVE_NOISE)
 		var live_noise := random.randf_range(-live_noise_limit, live_noise_limit)
@@ -74,6 +84,23 @@ func resolve_day(state: GameState) -> Array[Dictionary]:
 			pump_correction = random.randf() < PUMP_CORRECTION_CHANCE
 			pump_correction_percent = PUMP_CORRECTION_PERCENT if pump_correction else 0.02
 			actual_change -= pump_correction_percent
+		var sabotage_correction := false
+		var sabotage_correction_percent := 0.0
+		if stock.sabotage_active:
+			sabotage_correction = random.randf() < SABOTAGE_CORRECTION_CHANCE
+			sabotage_correction_percent = SABOTAGE_CORRECTION_PERCENT if sabotage_correction else SABOTAGE_SMALL_CORRECTION_PERCENT
+			actual_change -= sabotage_correction_percent
+		var fake_news_outcome := "none"
+		if stock.fake_news_active:
+			var fake_roll := random.randf()
+			if fake_roll < FAKE_NEWS_SUCCESS_CHANCE:
+				actual_change += stock.fake_news_projection_weight
+				fake_news_outcome = "worked"
+			elif fake_roll < FAKE_NEWS_SUCCESS_CHANCE + FAKE_NEWS_NO_EFFECT_CHANCE:
+				fake_news_outcome = "failed"
+			else:
+				actual_change -= FAKE_NEWS_BACKFIRE_PERCENT * float(stock.fake_news_direction)
+				fake_news_outcome = "backfired"
 		var next_price := maxi(PRICE_FLOOR_PENCE, roundi(float(opening_price_pence) * (1.0 + actual_change)))
 		stock.append_resolved_price(next_price)
 		var percentage_change := float(next_price - opening_price_pence) / float(opening_price_pence)
@@ -86,6 +113,12 @@ func resolve_day(state: GameState) -> Array[Dictionary]:
 			"pump_used": stock.pump_active,
 			"pump_correction": pump_correction,
 			"pump_correction_percent": pump_correction_percent,
+			"sabotage_used": stock.sabotage_active,
+			"sabotage_correction": sabotage_correction,
+			"sabotage_correction_percent": sabotage_correction_percent,
+			"fake_news_used": stock.fake_news_active,
+			"fake_news_direction": stock.fake_news_direction,
+			"fake_news_outcome": fake_news_outcome,
 		})
 	if state.current_day >= state.total_days:
 		state.phase = GameState.Phase.COMPLETE

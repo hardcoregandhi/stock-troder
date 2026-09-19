@@ -105,6 +105,10 @@ func setup(new_session: TradingSession) -> void:
 	session.trade_rejected.connect(_on_trade_result)
 	session.pump_completed.connect(_on_trade_result)
 	session.pump_rejected.connect(_on_trade_result)
+	session.sabotage_completed.connect(_on_trade_result)
+	session.sabotage_rejected.connect(_on_trade_result)
+	session.fake_news_completed.connect(_on_trade_result)
+	session.fake_news_rejected.connect(_on_trade_result)
 	session.run_completed.connect(_on_run_completed)
 	session.network_status_changed.connect(_on_network_status_changed)
 	session.network_readiness_changed.connect(_on_network_readiness_changed)
@@ -268,6 +272,8 @@ func _build_stock_header() -> void:
 		_column_label("SELL", 44),
 		_column_label("PUMP", 52),
 		_column_label("SABOTAGE", 70),
+		_column_label("FAKE+", 48),
+		_column_label("FAKE-", 48),
 	]:
 		stock_list.add_child(header)
 
@@ -310,6 +316,7 @@ func _on_day_resolved(day: int, resolutions: Array[Dictionary], _snapshot: Dicti
 			"text": str(resolution["news"]),
 			"resolved": true,
 			"change": float(resolution["percentage_change"]),
+			"fake_news": bool(resolution.get("fake_news_used", false)),
 		})
 	if news_history.size() > 18:
 		news_history = news_history.slice(news_history.size() - 18)
@@ -392,11 +399,23 @@ func _build_stock_rows(state: GameState) -> void:
 		stock_list.add_child(pump)
 		var sabotage := Button.new()
 		sabotage.text = "SABOTAGE"
-		sabotage.tooltip_text = "Sabotage is not available in this build."
+		sabotage.tooltip_text = "Spend £50.00 to add negative live pressure. Resolution risk remains."
 		sabotage.custom_minimum_size.x = 70
-		sabotage.disabled = true
+		sabotage.pressed.connect(_quick_sabotage.bind(stock.symbol))
 		stock_list.add_child(sabotage)
-		row_labels[stock.symbol] = {"price": price, "change": change, "range": range, "shares": shares, "position": position, "buy": buy, "sell": sell, "pump": pump}
+		var fake_positive := Button.new()
+		fake_positive.text = "FAKE+"
+		fake_positive.tooltip_text = "Spend £75.00 to plant uncertain positive news."
+		fake_positive.custom_minimum_size.x = 48
+		fake_positive.pressed.connect(_quick_fake_news.bind(stock.symbol, 1))
+		stock_list.add_child(fake_positive)
+		var fake_negative := Button.new()
+		fake_negative.text = "FAKE-"
+		fake_negative.tooltip_text = "Spend £75.00 to plant uncertain negative news."
+		fake_negative.custom_minimum_size.x = 48
+		fake_negative.pressed.connect(_quick_fake_news.bind(stock.symbol, -1))
+		stock_list.add_child(fake_negative)
+		row_labels[stock.symbol] = {"price": price, "change": change, "range": range, "shares": shares, "position": position, "buy": buy, "sell": sell, "pump": pump, "sabotage": sabotage, "fake_positive": fake_positive, "fake_negative": fake_negative}
 	_update_stock_rows(state)
 
 func _update_stock_rows(state: GameState) -> void:
@@ -417,6 +436,15 @@ func _update_stock_rows(state: GameState) -> void:
 		labels["pump"].text = "PUMP ON" if pump_active else "PUMP"
 		labels["pump"].tooltip_text = "ACTIVE: +4.0% live path; correction risk remains." if pump_active else "Spend £25.00 to lift this stock's live path."
 		labels["pump"].disabled = session.network_mode or not can_trade or pump_active or state.cash_pence < GameState.PUMP_COST_PENCE
+		var sabotage_active := state.has_sabotaged(stock.symbol) and stock.sabotage_active
+		labels["sabotage"].text = "SAB ON" if sabotage_active else "SABOTAGE"
+		labels["sabotage"].tooltip_text = "ACTIVE: negative live pressure; resolution risk remains." if sabotage_active else "Spend £50.00 to add negative live pressure."
+		labels["sabotage"].disabled = session.network_mode or not can_trade or sabotage_active or state.cash_pence < GameState.SABOTAGE_COST_PENCE
+		var fake_used := state.has_planted_fake_news(stock.symbol) and stock.fake_news_active
+		labels["fake_positive"].text = "FAKE+ ON" if fake_used and stock.fake_news_direction > 0 else "FAKE+"
+		labels["fake_negative"].text = "FAKE- ON" if fake_used and stock.fake_news_direction < 0 else "FAKE-"
+		labels["fake_positive"].disabled = session.network_mode or not can_trade or fake_used or state.cash_pence < GameState.FAKE_NEWS_COST_PENCE
+		labels["fake_negative"].disabled = session.network_mode or not can_trade or fake_used or state.cash_pence < GameState.FAKE_NEWS_COST_PENCE
 
 func _update_market_surface(state: GameState) -> void:
 	var chart_series: Array[Dictionary] = []
@@ -465,7 +493,8 @@ func _update_news_feed(state: GameState) -> void:
 	for entry in entries.slice(first_entry):
 		var color: Color = entry.get("color", NEGATIVE if float(entry["change"]) < 0.0 else POSITIVE)
 		var status := "RESOLVED %+.1f%%" % (float(entry["change"]) * 100.0) if bool(entry["resolved"]) else "FORECAST"
-		var item := _label("ROUND %d  %s  %s\n%s: %s" % [int(entry["day"]), str(entry["symbol"]), status, "" if bool(entry["resolved"]) else "SIGNAL", str(entry["text"])], 11, color)
+		var source := "PLAYER-PLANTED FAKE" if bool(entry.get("fake_news", false)) else ("SIGNAL" if not bool(entry["resolved"]) else "MARKET STORY")
+		var item := _label("ROUND %d  %s  %s\n%s: %s" % [int(entry["day"]), str(entry["symbol"]), status, source, str(entry["text"])], 11, color)
 		item.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		item.custom_minimum_size.x = 300
 		news_feed.add_child(item)
@@ -478,6 +507,12 @@ func _quick_sell(symbol: String) -> void:
 
 func _quick_pump(symbol: String) -> void:
 	session.pump(symbol)
+
+func _quick_sabotage(symbol: String) -> void:
+	session.sabotage(symbol)
+
+func _quick_fake_news(symbol: String, direction: int) -> void:
+	session.plant_fake_news(symbol, direction)
 
 func _open_pause_menu() -> void:
 	if pause_layer != null:
@@ -564,18 +599,26 @@ func _show_debrief(day: int, resolutions: Array[Dictionary]) -> void:
 	content.add_child(_label("Resolved prices, player result, action markers, and ranking.", 12, MUTED))
 	debrief_day_series = _day_graph_series(resolutions)
 	debrief_game_series = _game_graph_series()
+	var upper := HBoxContainer.new()
+	upper.add_theme_constant_override("separation", 10)
+	upper.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	upper.size_flags_stretch_ratio = 2.0
 	var chart_panel := _build_debrief_chart()
-	chart_panel.custom_minimum_size.y = 214
-	chart_panel.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	content.add_child(chart_panel)
-	var lower := HBoxContainer.new()
-	lower.add_theme_constant_override("separation", 10)
+	chart_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	chart_panel.size_flags_stretch_ratio = 1.0
+	upper.add_child(chart_panel)
+	var details_panel := _build_debrief_details_panel(resolutions)
+	details_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	details_panel.size_flags_stretch_ratio = 1.0
+	upper.add_child(details_panel)
+	content.add_child(upper)
+	var lower := _build_debrief_news_panel(resolutions)
 	lower.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	lower.size_flags_stretch_ratio = 1.0
 	content.add_child(lower)
-	lower.add_child(_build_debrief_news_panel(resolutions))
-	lower.add_child(_build_debrief_details_panel(resolutions))
 	var action_bar := HBoxContainer.new()
 	action_bar.custom_minimum_size.y = 42
+	action_bar.size_flags_vertical = Control.SIZE_SHRINK_END
 	action_bar.alignment = BoxContainer.ALIGNMENT_END
 	content.add_child(action_bar)
 	var action_spacer := Control.new()
@@ -621,9 +664,9 @@ func _build_debrief_news_panel(resolutions: Array[Dictionary]) -> Control:
 		var result := _label("%+.1f%%" % change, 11, POSITIVE if change >= 0.0 else NEGATIVE)
 		result.custom_minimum_size.x = 82
 		grid.add_child(result)
-		var action_text := "PUMP CORRECTION" if bool(resolution.get("pump_correction", false)) else ("PUMP USED" if bool(resolution.get("pump_used", false)) else "NONE")
-		var action := _label(action_text, 10, ACCENT if bool(resolution.get("pump_used", false)) else MUTED)
-		action.custom_minimum_size.x = 120
+		var action_text := _action_marker_text(resolution)
+		var action := _label(action_text, 10, ACCENT if action_text != "NONE" else MUTED)
+		action.custom_minimum_size.x = 170
 		grid.add_child(action)
 	content.add_child(grid)
 	return panel
@@ -646,7 +689,7 @@ func _build_debrief_details_panel(resolutions: Array[Dictionary]) -> Control:
 		_format_pence(int(round_record.get("player_portfolio_value_pence", session.game_state.portfolio_value_pence()))),
 		_format_pence(int(round_record.get("player_cash_pence", session.game_state.cash_pence))),
 	], 11, TEXT))
-	content.add_child(_label("SABOTAGE: unavailable in this build", 10, MUTED))
+	content.add_child(_label("Actions are paid, once per stock per round, and never guarantee a price result.", 10, MUTED))
 	var result_grid := GridContainer.new()
 	result_grid.columns = 4
 	result_grid.add_theme_constant_override("h_separation", 7)
@@ -671,6 +714,16 @@ func _build_debrief_details_panel(resolutions: Array[Dictionary]) -> Control:
 	content.add_child(result_grid)
 	content.add_child(_build_rankings_panel(_display_rankings()))
 	return panel
+
+func _action_marker_text(resolution: Dictionary) -> String:
+	var markers: Array[String] = []
+	if bool(resolution.get("pump_used", false)):
+		markers.append("PUMP CORRECTION" if bool(resolution.get("pump_correction", false)) else "PUMP USED")
+	if bool(resolution.get("sabotage_used", false)):
+		markers.append("SABOTAGE CORRECTION" if bool(resolution.get("sabotage_correction", false)) else "SABOTAGE USED")
+	if bool(resolution.get("fake_news_used", false)):
+		markers.append("FAKE NEWS %s" % str(resolution.get("fake_news_outcome", "failed")).to_upper())
+	return ", ".join(markers) if not markers.is_empty() else "NONE"
 
 func _continue_after_debrief() -> void:
 	if session.continue_to_next_day() and debrief_panel != null:

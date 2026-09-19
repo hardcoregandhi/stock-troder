@@ -16,6 +16,8 @@ const DEFAULT_STOCK_COUNT: int = 6
 const MIN_STOCK_COUNT: int = 1
 const MAX_STOCK_COUNT: int = 6
 const PUMP_COST_PENCE: int = 2_500
+const SABOTAGE_COST_PENCE: int = 5_000
+const FAKE_NEWS_COST_PENCE: int = 7_500
 
 var starting_cash_pence: int = STARTING_CASH_PENCE
 var cash_pence: int = STARTING_CASH_PENCE
@@ -25,6 +27,8 @@ var phase: Phase = Phase.PREPARING
 var stocks: Array[StockData] = []
 var holdings: Dictionary = {}
 var pumped_symbols: Dictionary = {}
+var sabotaged_symbols: Dictionary = {}
+var fake_news_symbols: Dictionary = {}
 var seed: int
 var stock_count: int = DEFAULT_STOCK_COUNT
 
@@ -69,10 +73,24 @@ func mark_pumped(symbol: String) -> void:
 func has_pumped(symbol: String) -> bool:
 	return bool(pumped_symbols.get(symbol, false))
 
+func mark_sabotaged(symbol: String) -> void:
+	sabotaged_symbols[symbol] = true
+
+func has_sabotaged(symbol: String) -> bool:
+	return bool(sabotaged_symbols.get(symbol, false))
+
+func mark_fake_news_planted(symbol: String) -> void:
+	fake_news_symbols[symbol] = true
+
+func has_planted_fake_news(symbol: String) -> bool:
+	return bool(fake_news_symbols.get(symbol, false))
+
 func reset_round_manipulations() -> void:
 	pumped_symbols.clear()
+	sabotaged_symbols.clear()
+	fake_news_symbols.clear()
 	for stock in stocks:
-		stock.clear_pump()
+		stock.clear_manipulation()
 
 func portfolio_value_pence() -> int:
 	var value := cash_pence

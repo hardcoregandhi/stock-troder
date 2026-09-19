@@ -61,7 +61,7 @@ That is the intended tension.
 |                                                               |
 +----------------------+----------------------+-----------------+
 | Stock | Price | +/-  | Projection | Owned | BUY | SELL       |
-| AUR   | £50   | ...  | ...        | ...   |  +  |  -         |
+| AUR   | £50   | ...  | ...        | ...   |  +  |  -  | PUMP | SABOTAGE | FAKE+ | FAKE- |
 | BRK   | £100  | ...  | ...        | ...   |  +  |  -         |
 | ...                                                        |
 +----------------------+----------------------+-----------------+
@@ -113,6 +113,7 @@ Show:
 - Position value.
 - One-share Buy button.
 - One-share Sell button.
+- Pump, Sabotage, Fake+ and Fake- action buttons after Buy and Sell.
 
 The buttons should buy or sell one share. A selected-stock panel can provide a quantity control for larger orders, but the common action must be fast.
 
@@ -121,6 +122,8 @@ When the player cannot act:
 - Disable the button when the phase does not allow trading.
 - Show a short reason for rejection.
 - Never hide the stock row.
+
+Manipulation buttons show their paid cost in the tooltip, become unavailable outside `TRADING`, and change to an active label after use. The row remains the only manipulation control surface; do not duplicate these controls in a detail panel.
 
 ## 6. News Feed
 
@@ -147,6 +150,13 @@ After resolution:
 ```text
 ROUND 3  CYN  New energy contract announced
 Resolved: +12.4%
+```
+
+Player-planted stories use a separate source label:
+
+```text
+ROUND 3  CYN  FORECAST
+PLAYER-PLANTED FAKE: New energy contract announced
 ```
 
 The feed should not reveal the exact future price before resolution.
@@ -201,6 +211,7 @@ Show:
 - Opening and closing prices for every stock.
 - Percentage movement.
 - Resolved news.
+- Action markers for Pump, Sabotage, and Fake News, including correction and backfire status.
 - Player's round profit/loss.
 - Other players' round profit/loss in multiplayer.
 - Updated holdings and cash.

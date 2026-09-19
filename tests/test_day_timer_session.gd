@@ -130,6 +130,19 @@ func test_next_day_resets_pump_usage() -> void:
 	assert_true(session.start_trading_round())
 	assert_true(session.pump("AUR")["success"])
 
+func test_next_day_resets_all_manipulation_usage() -> void:
+	var session: TradingSession = _new_session()
+	session.start_run(16, 2)
+	assert_true(session.start_trading_round())
+	assert_true(session.sabotage("AUR")["success"])
+	assert_true(session.plant_fake_news("BRK", -1)["success"])
+	session._on_day_timer_timed_out()
+	assert_true(session.game_state.has_sabotaged("AUR"))
+	assert_true(session.game_state.has_planted_fake_news("BRK"))
+	assert_true(session.continue_to_next_day())
+	assert_false(session.game_state.has_sabotaged("AUR"))
+	assert_false(session.game_state.has_planted_fake_news("BRK"))
+
 func _new_session() -> TradingSession:
 	var session: TradingSession = TRADING_SESSION.new()
 	track(session)

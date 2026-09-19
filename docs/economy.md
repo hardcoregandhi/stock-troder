@@ -159,6 +159,12 @@ sabotage value = target position gain
 
 It should not be priced as a simple negative Pump.
 
+Phase 1.5 uses a £50 sabotage cost, or 5% of the £1,000 starting cash. It gives a visible -4% live pressure but adds a seeded 6% downside in 65% of resolutions and 2% otherwise. Each stock allows one use per round. The cost, limited use, and uncertain resolution keep sabotage from being a dominant cash-to-profit conversion.
+
+### Fake News
+
+Plant Fake News costs £75, or 7.5% of starting cash. The player chooses positive or negative direction. The chosen direction shifts the target's projection and live path by 3%, but the seeded resolution has a 55% chance to work, 25% chance to fail, and 20% chance to backfire by applying a 4% movement in the opposite direction. One target can receive one planted story per round. The player pays before learning the outcome.
+
 ## 7. Payoff Tables
 
 A payoff table connects formulas to game rules.

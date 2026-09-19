@@ -158,6 +158,47 @@ func test_pump_changes_resolution_path_under_same_seed() -> void:
 	assert_gt(float(pumped_resolution["pump_correction_percent"]), 0.0)
 	assert_ne(pumped_resolution["closing_price_pence"], normal_resolution["closing_price_pence"])
 
+func test_sabotage_changes_live_path_and_seeded_resolution() -> void:
+	var first_state = GAME_STATE.new(818, 2)
+	var second_state = GAME_STATE.new(818, 2)
+	var first_simulator = MARKET_SIMULATOR.new(818)
+	var second_simulator = MARKET_SIMULATOR.new(818)
+	first_simulator.prepare_day(first_state)
+	second_simulator.prepare_day(second_state)
+	first_simulator.start_trading(first_state)
+	second_simulator.start_trading(second_state)
+	assert_true(TRADE_SERVICE.new().sabotage(first_state, "AUR")["success"])
+	assert_true(TRADE_SERVICE.new().sabotage(second_state, "AUR")["success"])
+	first_simulator.update_live_prices(first_state, 0.75)
+	second_simulator.update_live_prices(second_state, 0.75)
+	assert_eq(_prices(first_state), _prices(second_state))
+	var first_resolution := first_simulator.resolve_day(first_state)[0]
+	var second_resolution := second_simulator.resolve_day(second_state)[0]
+	assert_eq(first_resolution, second_resolution)
+	assert_true(first_resolution["sabotage_used"])
+	assert_gt(float(first_resolution["sabotage_correction_percent"]), 0.0)
+
+func test_fake_news_direction_changes_projection_and_reports_seeded_outcome() -> void:
+	var first_state = GAME_STATE.new(919, 2)
+	var second_state = GAME_STATE.new(919, 2)
+	var first_simulator = MARKET_SIMULATOR.new(919)
+	var second_simulator = MARKET_SIMULATOR.new(919)
+	first_simulator.prepare_day(first_state)
+	second_simulator.prepare_day(second_state)
+	first_simulator.start_trading(first_state)
+	second_simulator.start_trading(second_state)
+	var first_stock: StockData = first_state.get_stock("AUR")
+	var before_projection := first_stock.projection_change
+	assert_true(TRADE_SERVICE.new().plant_fake_news(first_state, "AUR", 1)["success"])
+	assert_true(TRADE_SERVICE.new().plant_fake_news(second_state, "AUR", 1)["success"])
+	assert_gt(first_stock.projection_change, before_projection)
+	assert_true(first_stock.current_news.begins_with("PLAYER-PLANTED FAKE:"))
+	var first_resolution := first_simulator.resolve_day(first_state)[0]
+	var second_resolution := second_simulator.resolve_day(second_state)[0]
+	assert_eq(first_resolution, second_resolution)
+	assert_true(first_resolution["fake_news_used"])
+	assert_true(["worked", "failed", "backfired"].has(first_resolution["fake_news_outcome"]))
+
 func _prices(state) -> Array[int]:
 	var prices: Array[int] = []
 	for stock in state.stocks:

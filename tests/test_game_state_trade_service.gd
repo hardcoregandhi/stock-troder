@@ -100,3 +100,39 @@ func test_pump_is_once_per_stock_and_never_makes_cash_negative() -> void:
 	assert_false(second["success"])
 	assert_eq(state.cash_pence, state.starting_cash_pence - GameState.PUMP_COST_PENCE)
 	assert_true(state.cash_pence >= 0)
+
+func test_sabotage_costs_fifty_pounds_is_trading_only_and_once_per_stock() -> void:
+	var state: GameState = GAME_STATE.new(123, 3)
+	var service: TradeService = TRADE_SERVICE.new()
+	assert_false(service.sabotage(state, "AUR")["success"])
+	state.phase = GameState.Phase.TRADING
+	var result := service.sabotage(state, "AUR")
+	assert_true(result["success"])
+	assert_eq(result["cost_pence"], 5_000)
+	assert_eq(state.cash_pence, 95_000)
+	assert_true(state.has_sabotaged("AUR"))
+	assert_false(service.sabotage(state, "AUR")["success"])
+
+func test_fake_news_costs_seventy_five_pounds_preserves_direction_and_is_once_per_stock() -> void:
+	var state: GameState = GAME_STATE.new(123, 3)
+	var service: TradeService = TRADE_SERVICE.new()
+	state.phase = GameState.Phase.TRADING
+	var result := service.plant_fake_news(state, "AUR", -1)
+	assert_true(result["success"])
+	assert_eq(result["cost_pence"], 7_500)
+	assert_eq(state.cash_pence, 92_500)
+	assert_eq(state.get_stock("AUR").fake_news_direction, -1)
+	assert_true(state.get_stock("AUR").current_news.begins_with("PLAYER-PLANTED FAKE:"))
+	assert_false(service.plant_fake_news(state, "AUR", 1)["success"])
+
+func test_manipulation_usage_resets_between_rounds() -> void:
+	var state: GameState = GAME_STATE.new(123, 3)
+	state.phase = GameState.Phase.TRADING
+	var service: TradeService = TRADE_SERVICE.new()
+	assert_true(service.sabotage(state, "AUR")["success"])
+	assert_true(service.plant_fake_news(state, "BRK", 1)["success"])
+	state.reset_round_manipulations()
+	assert_false(state.has_sabotaged("AUR"))
+	assert_false(state.has_planted_fake_news("BRK"))
+	assert_false(state.get_stock("AUR").sabotage_active)
+	assert_false(state.get_stock("BRK").fake_news_active)

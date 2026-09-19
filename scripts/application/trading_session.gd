@@ -10,6 +10,10 @@ signal trade_completed(trade_result: Dictionary)
 signal trade_rejected(trade_result: Dictionary)
 signal pump_completed(pump_result: Dictionary)
 signal pump_rejected(pump_result: Dictionary)
+signal sabotage_completed(sabotage_result: Dictionary)
+signal sabotage_rejected(sabotage_result: Dictionary)
+signal fake_news_completed(fake_news_result: Dictionary)
+signal fake_news_rejected(fake_news_result: Dictionary)
 signal day_resolved(day_number: int, resolution_result: Array[Dictionary], state_snapshot: Dictionary)
 signal run_completed(summary: Dictionary)
 signal network_status_changed(message: String)
@@ -88,17 +92,23 @@ func start_network_client(lobby: NetworkLobby, player_id: int) -> void:
 	market_simulator = null
 	day_timer.stop()
 
-func receive_network_intent(peer_id: int, action: String, symbol: String, quantity: int) -> void:
+func receive_network_intent(peer_id: int, action: String, symbol: String, quantity: int) -> Dictionary:
 	if not network_mode or not network_is_host or not network_player_states.has(peer_id):
-		return
+		return _network_action_rejection(symbol, action)
 	if action == "buy":
-		_execute_network_trade(peer_id, trade_service.buy(network_player_states[peer_id], symbol, quantity))
+		return _execute_network_trade(peer_id, trade_service.buy(network_player_states[peer_id], symbol, quantity))
 	elif action == "sell":
-		_execute_network_trade(peer_id, trade_service.sell(network_player_states[peer_id], symbol, quantity))
+		return _execute_network_trade(peer_id, trade_service.sell(network_player_states[peer_id], symbol, quantity))
+	elif action == "sabotage" or action == "fake_news_positive" or action == "fake_news_negative":
+		var result := _network_action_rejection(symbol, action)
+		if network_lobby != null:
+			network_lobby.send_match_event({"type": "status", "message": result["message"]}, peer_id)
+		return result
 	elif action == "ready_for_next_day":
 		_mark_network_player_ready(peer_id)
 	elif action == "ready_for_trading":
 		_mark_network_player_ready_for_trading(peer_id)
+	return {"success": false, "message": "Unknown network action.", "action": action, "symbol": symbol}
 
 func remove_network_player(peer_id: int) -> void:
 	if not network_is_host:
@@ -131,6 +141,28 @@ func pump(symbol: String) -> Dictionary:
 		pump_completed.emit(result)
 	else:
 		pump_rejected.emit(result)
+	return result
+
+func sabotage(symbol: String) -> Dictionary:
+	if network_mode:
+		return _network_action_rejection(symbol, "sabotage")
+	var result := trade_service.sabotage(game_state, symbol)
+	if result["success"]:
+		sabotage_completed.emit(result)
+	else:
+		sabotage_rejected.emit(result)
+	market_updated.emit(state_snapshot())
+	return result
+
+func plant_fake_news(symbol: String, direction: int) -> Dictionary:
+	if network_mode:
+		return _network_action_rejection(symbol, "fake_news")
+	var result := trade_service.plant_fake_news(game_state, symbol, direction)
+	if result["success"]:
+		fake_news_completed.emit(result)
+	else:
+		fake_news_rejected.emit(result)
+	market_updated.emit(state_snapshot())
 	return result
 
 func continue_to_next_day() -> bool:
@@ -199,6 +231,12 @@ func state_snapshot() -> Dictionary:
 			"pump_used": game_state.has_pumped(stock.symbol),
 			"pump_active": stock.pump_active,
 			"pump_live_boost": stock.pump_live_boost,
+			"sabotage_used": game_state.has_sabotaged(stock.symbol),
+			"sabotage_active": stock.sabotage_active,
+			"sabotage_live_pressure": stock.sabotage_live_pressure,
+			"fake_news_used": game_state.has_planted_fake_news(stock.symbol),
+			"fake_news_direction": stock.fake_news_direction,
+			"fake_news_active": stock.fake_news_active,
 		})
 	return {
 		"day": game_state.current_day,
@@ -245,6 +283,10 @@ func apply_network_snapshot(snapshot: Dictionary) -> void:
 		stock.projection_confidence = str(record.get("projection_confidence", ""))
 		stock.pump_active = bool(record.get("pump_active", false))
 		stock.pump_live_boost = float(record.get("pump_live_boost", 0.0))
+		stock.sabotage_active = bool(record.get("sabotage_active", false))
+		stock.sabotage_live_pressure = float(record.get("sabotage_live_pressure", 0.0))
+		stock.fake_news_direction = int(record.get("fake_news_direction", 0))
+		stock.fake_news_active = bool(record.get("fake_news_active", false))
 	network_rankings.clear()
 	for player in snapshot.get("players", []):
 		network_rankings.append(player.duplicate(true))
@@ -450,7 +492,18 @@ func _round_record(day: int, resolutions: Array[Dictionary]) -> Dictionary:
 		"player_return_pence": game_state.total_return_pence(),
 		"player_holdings": game_state.holdings.duplicate(),
 		"pump_markers": resolutions.filter(func(item: Dictionary) -> bool: return bool(item.get("pump_used", false))),
-		"sabotage_markers": [],
+		"sabotage_markers": resolutions.filter(func(item: Dictionary) -> bool: return bool(item.get("sabotage_used", false))),
+		"fake_news_markers": resolutions.filter(func(item: Dictionary) -> bool: return bool(item.get("fake_news_used", false))),
+	}
+
+func _network_action_rejection(symbol: String, action: String) -> Dictionary:
+	var label := "Sabotage" if action == "sabotage" else "Fake News"
+	return {
+		"success": false,
+		"action": action,
+		"symbol": symbol,
+		"message": "%s is a single-player action and is rejected in multiplayer." % label,
+		"cost_pence": 0,
 	}
 
 func _percentage_change(opening_price_pence: int, closing_price_pence: int) -> float:

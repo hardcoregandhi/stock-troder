@@ -97,6 +97,8 @@ pump(symbol)
 ready_for_next_day()
 ```
 
+The client must not send `pump`, `sabotage`, or planted-news intents in Phase 1.5. Pump, Sabotage, and Fake News are single-player actions. A network request for Sabotage or Fake News receives a clear rejection and cannot change cash, prices, news, or holdings.
+
 The client must never send:
 
 - Cash values.
@@ -158,6 +160,17 @@ The host owns:
 - Add public action feedback.
 - Add anti-spam and disconnect rules.
 - Test whether one player's action changes another player's best response.
+
+Until Phase 2E is designed, the local flow is:
+
+```text
+Trading row
+  -> TradingSession action method
+  -> TradeService paid validation
+  -> GameState and StockData mutation
+  -> MarketSimulator seeded outcome at resolution
+  -> News feed and debrief marker
+```
 
 ## 6. Network Rules
 

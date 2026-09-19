@@ -26,22 +26,22 @@ Presentation Layer
   StockList
   StockChart
   TradingClock
-  RunSummary
-          |
-          | user commands and state signals
-          v
-Application Layer
-  TradingSession
-  TradeService
-  DayTimer
-          |
-          | validated commands and simulation requests
+    RunSummary
+      |
+      | user commands and state signals
+      v
+  Application Layer
+    TradingSession
+    TradeService
+    DayTimer
+      |
+      | validated commands and simulation requests
           v
 Simulation Layer
   GameState
   MarketSimulator
   StockData
-  MarketEvent
+    MarketEvent
           |
           v
 Persistence / Future Networking Boundary
@@ -219,6 +219,10 @@ Phase 1 has no transaction fee, but the result structure should leave room for o
 
 `StockData` stores the temporary round Pump state. `MarketSimulator` applies the 4% short-term live path boost and uses its seeded random generator at resolution for the 65% 8% correction risk or 35% 2% correction. The resolution record includes `pump_used`, `pump_correction`, and `pump_correction_percent`. `GameState.reset_round_manipulations()` clears usage when `TradingSession.continue_to_next_day()` starts the next round.
 
+#### Phase 1.5 manipulation boundary
+
+`TradeService.sabotage(state, symbol)` validates `TRADING`, the target stock, one use per stock, and the 5,000 pence cost. It marks the target and applies -4% live pressure. `TradeService.plant_fake_news(state, symbol, direction)` validates the same phase, target, one-use rule, positive or negative direction, and the 7,500 pence cost. It updates the target projection weighting and labels its news as player-planted fake. `MarketSimulator` owns the seeded correction, failure, and backfire rolls. `TradingSession` emits structured action results and records all action markers in the debrief. Network manipulation requests are rejected before any player state changes because these actions are single-player only.
+
 ### `TradingSession`
 
 Coordinates the complete run lifecycle.
@@ -286,6 +290,8 @@ DEBRIEF
 
 - Buy and sell requests are accepted only during `TRADING`.
 - Pump requests are accepted only during `TRADING`, once per stock per round, and only when cash covers the fixed cost.
+- Sabotage requests are accepted only during `TRADING`, once per stock per round, and only when cash covers 5,000 pence.
+- Fake News requests are accepted only during `TRADING`, once per stock per round, only with a non-zero direction, and only when cash covers 7,500 pence.
 - Projections are generated during `PREPARING`, shown in `BRIEF`, and remain fixed during `TRADING`.
 - Prices update during `TRADING` at the configured market sample interval. A market sample is not a new day.
 - The timer is stopped during `RESOLVING`.

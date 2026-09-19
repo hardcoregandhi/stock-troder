@@ -182,6 +182,14 @@ The action is interesting only if the player can respond to it. If Pump changes 
 
 The live graph and the 30-second window give the player agency, but the correction risk prevents certainty.
 
+## 6.1 Sabotage and planted news
+
+Sabotage is a paid negative-pressure bet. The player gives up £50 for a visible -4% live pressure, then accepts a seeded 6% or 2% resolution downside. It is useful when the target is already weak, but it is not a guaranteed way to profit because the player must still hold or trade a position and pays the cost first.
+
+Plant Fake News is an information and influence bet. The player pays £75 and chooses a positive or negative direction. The story changes the target's projection weighting and is visible as `PLAYER-PLANTED FAKE`, but the seeded result can work, fail, or backfire. This preserves uncertainty and gives the player a reason to compare the action with a normal trade or cash reserve.
+
+Both actions are limited to one use per stock per round and reset at **Next Day**. They are single-player actions. Multiplayer requests are rejected until a shared-market design defines whose market is affected and how other players receive the information.
+
 ## 6. Dominant Strategies and Balance Warnings
 
 A dominant strategy is an action that is better than every alternative in almost every situation. Dominant strategies reduce the game to button selection.

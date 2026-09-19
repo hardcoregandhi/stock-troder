@@ -22,6 +22,11 @@ var news_impact: float = 0.0
 var projected_price_pence: int = 0
 var pump_active: bool = false
 var pump_live_boost: float = 0.0
+var sabotage_active: bool = false
+var sabotage_live_pressure: float = 0.0
+var fake_news_direction: int = 0
+var fake_news_projection_weight: float = 0.0
+var fake_news_active: bool = false
 
 func _init(
 	stock_symbol: String,
@@ -89,6 +94,11 @@ func set_projection(change: float, low: float, high: float, news: String, impact
 	live_price_history_pence.append(current_price_pence)
 	pump_active = false
 	pump_live_boost = 0.0
+	sabotage_active = false
+	sabotage_live_pressure = 0.0
+	fake_news_direction = 0
+	fake_news_projection_weight = 0.0
+	fake_news_active = false
 	projection_change = change
 	projection_low = low
 	projection_high = high
@@ -112,9 +122,27 @@ func activate_pump(live_boost: float) -> void:
 	pump_active = true
 	pump_live_boost = live_boost
 
+func activate_sabotage(live_pressure: float) -> void:
+	sabotage_active = true
+	sabotage_live_pressure = live_pressure
+
+func activate_fake_news(direction: int, projection_weight: float, base_news: String) -> void:
+	fake_news_direction = clampi(direction, -1, 1)
+	fake_news_projection_weight = projection_weight
+	fake_news_active = true
+	current_news = "PLAYER-PLANTED FAKE: %s" % base_news
+
 func clear_pump() -> void:
 	pump_active = false
 	pump_live_boost = 0.0
+
+func clear_manipulation() -> void:
+	clear_pump()
+	sabotage_active = false
+	sabotage_live_pressure = 0.0
+	fake_news_direction = 0
+	fake_news_projection_weight = 0.0
+	fake_news_active = false
 
 func graph_history_pence() -> Array[int]:
 	var history: Array[int] = price_history_pence.duplicate()
