@@ -41,7 +41,7 @@ func pump(state: GameState, symbol: String) -> Dictionary:
 	state.cash_pence -= GameState.PUMP_COST_PENCE
 	state.mark_pumped(symbol)
 	stock.activate_pump(0.04)
-	return _pump_result(state, true, "Pump applied. Price may correct at resolution.", symbol, GameState.PUMP_COST_PENCE, true, stock.pump_live_boost, true)
+	return _pump_result(state, true, "Pump active on %s: +4.0%% live path. £25.00 spent; correction risk at resolution." % symbol, symbol, GameState.PUMP_COST_PENCE, true, stock.pump_live_boost, true)
 
 func liquidate_all(state: GameState) -> int:
 	var liquidated_value := 0

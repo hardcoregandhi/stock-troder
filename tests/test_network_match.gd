@@ -75,3 +75,25 @@ func test_host_ranking_uses_authoritative_portfolio_values() -> void:
 	assert_eq(rankings[0]["player_id"], 2)
 	assert_eq(rankings[0]["cash_pence"], 120_000)
 	assert_eq(rankings[0]["return_pence"], 20_000)
+
+func test_start_trading_waits_for_every_player_and_resets_readiness_after_start() -> void:
+	var session: TradingSession = TRADING_SESSION.new()
+	track(session)
+	session._ready()
+	session.network_mode = true
+	session.network_is_host = true
+	session.network_local_player_id = 1
+	session.game_state = GAME_STATE.new(42, 2)
+	session.market_simulator = MarketSimulator.new(42)
+	session.trade_service = TradeService.new()
+	session.game_state.phase = GAME_STATE.Phase.BRIEF
+	session.network_player_states = {1: session.game_state, 2: GAME_STATE.new(42, 2)}
+	session.network_ready_players = {1: false, 2: false}
+
+	assert_false(session.start_trading_round())
+	assert_eq(session._network_ready_count(), 1)
+	assert_eq(session.game_state.phase, GAME_STATE.Phase.BRIEF)
+
+	session._mark_network_player_ready_for_trading(2)
+	assert_eq(session._network_ready_count(), 0)
+	assert_eq(session.game_state.phase, GAME_STATE.Phase.TRADING)

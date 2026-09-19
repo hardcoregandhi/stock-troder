@@ -1,6 +1,8 @@
 class_name TradingDashboard
 extends Control
 
+signal exit_to_main_menu_requested
+
 const BG := Color("101820")
 const PANEL := Color("182733")
 const PANEL_LIGHT := Color("203545")
@@ -24,12 +26,9 @@ var detail_projection: Label
 var detail_news: Label
 var detail_shares: Label
 var trade_feedback: Label
-var quantity: SpinBox
-var pump_button: Button
 var pump_status: Label
 var network_status: Label
 var chart: StockHistoryChart
-var chart_legend: Control
 var summary_panel: PanelContainer
 var summary_layer: Control
 var debrief_panel: PanelContainer
@@ -44,6 +43,8 @@ var selected_symbol := "AUR"
 var row_labels: Dictionary = {}
 var news_feed: VBoxContainer
 var news_history: Array[Dictionary] = []
+var pause_layer: Control
+var start_trading_button: Button
 
 class StockHistoryChart extends Control:
 	var series: Array[Dictionary] = []
@@ -113,6 +114,7 @@ func setup(new_session: TradingSession) -> void:
 	session.pump_rejected.connect(_on_trade_result)
 	session.run_completed.connect(_on_run_completed)
 	session.network_status_changed.connect(_on_network_status_changed)
+	session.network_readiness_changed.connect(_on_network_readiness_changed)
 
 func _build_ui() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -146,29 +148,28 @@ func _build_ui() -> void:
 func _build_header() -> Control:
 	var row := HBoxContainer.new()
 	row.custom_minimum_size.y = 48
-	var title := Label.new()
-	title.text = "STOCKTRODER"
-	title.add_theme_font_size_override("font_size", 28)
-	title.add_theme_color_override("font_color", TEXT)
-	row.add_child(title)
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(spacer)
-	day_label = _label("DAY 1 / 10", 18, TEXT)
-	row.add_child(day_label)
+	var menu_button := Button.new()
+	menu_button.text = "MENU"
+	menu_button.tooltip_text = "Open the pause menu"
+	menu_button.custom_minimum_size = Vector2(90, 36)
+	menu_button.pressed.connect(_open_pause_menu)
+	row.add_child(menu_button)
 	network_status = _label("", 12, MUTED)
 	network_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	network_status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(network_status)
 	return row
 
 func _build_status_bar() -> Control:
 	var panel := _panel()
 	var grid := GridContainer.new()
-	grid.columns = 4
+	grid.columns = 5
 	grid.add_theme_constant_override("h_separation", 30)
 	grid.add_theme_constant_override("v_separation", 2)
 	panel.add_child(grid)
+	day_label = _status_item(grid, "DAY / ROUND", "DAY 1 / 10", TEXT)
 	clock_label = _status_item(grid, "TIME LEFT", "30.0s", ACCENT)
 	cash_label = _status_item(grid, "CASH", "£0.00", TEXT)
 	portfolio_label = _status_item(grid, "PORTFOLIO", "£0.00", TEXT)
@@ -197,17 +198,19 @@ func _build_market_panel() -> Control:
 	chart.custom_minimum_size.y = 155
 	chart.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	content.add_child(chart)
-	chart_legend = FlowContainer.new()
-	chart_legend.add_theme_constant_override("separation", 12)
-	chart_legend.custom_minimum_size.y = 26
-	content.add_child(chart_legend)
 	stock_list = GridContainer.new()
-	stock_list.columns = 9
+	stock_list.columns = 11
+	stock_list.custom_minimum_size.x = 758
 	stock_list.add_theme_constant_override("h_separation", 6)
 	stock_list.add_theme_constant_override("v_separation", 5)
 	_build_stock_header()
-	stock_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	content.add_child(stock_list)
+	var stock_scroll := ScrollContainer.new()
+	stock_scroll.custom_minimum_size.y = 170
+	stock_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	stock_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	stock_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	stock_scroll.add_child(stock_list)
+	content.add_child(stock_scroll)
 	return panel
 
 func _build_detail_panel() -> Control:
@@ -235,43 +238,14 @@ func _build_detail_panel() -> Control:
 	detail_shares = _label("Shares held: 0", 13, TEXT)
 	content.add_child(detail_shares)
 	var trade_row := HBoxContainer.new()
-	trade_row.add_theme_constant_override("separation", 8)
-	quantity = SpinBox.new()
-	quantity.min_value = 1
-	quantity.max_value = 999
-	quantity.value = 1
-	quantity.step = 1
-	quantity.custom_minimum_size.x = 90
-	trade_row.add_child(quantity)
-	var buy_button := Button.new()
-	buy_button.text = "BUY"
-	buy_button.custom_minimum_size.x = 90
-	buy_button.pressed.connect(_on_buy_detail)
-	trade_row.add_child(buy_button)
-	var sell_button := Button.new()
-	sell_button.text = "SELL"
-	sell_button.custom_minimum_size.x = 90
-	sell_button.pressed.connect(_on_sell_detail)
-	trade_row.add_child(sell_button)
-	content.add_child(trade_row)
-	trade_feedback = _label("Select a stock and place a trade.", 12, MUTED)
+	trade_feedback = _label("Select a row to trade one share.", 12, MUTED)
 	trade_feedback.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	trade_feedback.custom_minimum_size.x = 300
 	content.add_child(trade_feedback)
-	var pump_row := HBoxContainer.new()
-	pump_row.add_theme_constant_override("separation", 8)
-	pump_button = Button.new()
-	pump_button.text = "PUMP"
-	pump_button.tooltip_text = "Spend £25.00 to lift this stock's live path. Correction risk at resolution."
-	pump_button.custom_minimum_size.x = 90
-	pump_button.pressed.connect(_on_pump)
-	pump_row.add_child(pump_button)
 	pump_status = _label("PUMP COST £25.00 | Once per stock per round", 12, MUTED)
 	pump_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	pump_status.custom_minimum_size = Vector2(205, 38)
-	pump_status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	pump_row.add_child(pump_status)
-	content.add_child(pump_row)
+	pump_status.custom_minimum_size = Vector2(300, 38)
+	content.add_child(pump_status)
 	content.add_child(_label("NEWS FEED", 12, MUTED))
 	var news_scroll := ScrollContainer.new()
 	news_scroll.custom_minimum_size.y = 104
@@ -316,6 +290,8 @@ func _build_stock_header() -> void:
 		_column_label("POSITION", 72),
 		_column_label("BUY", 44),
 		_column_label("SELL", 44),
+		_column_label("PUMP", 52),
+		_column_label("SABOTAGE", 70),
 	]:
 		stock_list.add_child(header)
 
@@ -373,6 +349,9 @@ func _on_trade_result(result: Dictionary) -> void:
 func _on_network_status_changed(message: String) -> void:
 	if network_status != null:
 		network_status.text = message
+
+func _on_network_readiness_changed(_ready_count: int, _total_count: int, _local_ready: bool) -> void:
+	_update_start_trading_button()
 
 func _refresh() -> void:
 	if session == null or session.game_state == null:
@@ -432,7 +411,19 @@ func _build_stock_rows(state: GameState) -> void:
 		sell.custom_minimum_size.x = 44
 		sell.pressed.connect(_quick_sell.bind(stock.symbol))
 		stock_list.add_child(sell)
-		row_labels[stock.symbol] = {"price": price, "change": change, "range": range, "shares": shares, "position": position, "buy": buy, "sell": sell}
+		var pump := Button.new()
+		pump.text = "PUMP"
+		pump.tooltip_text = "Spend £25.00 to lift this stock's live path."
+		pump.custom_minimum_size.x = 52
+		pump.pressed.connect(_quick_pump.bind(stock.symbol))
+		stock_list.add_child(pump)
+		var sabotage := Button.new()
+		sabotage.text = "SABOTAGE"
+		sabotage.tooltip_text = "Sabotage is not available in this build."
+		sabotage.custom_minimum_size.x = 70
+		sabotage.disabled = true
+		stock_list.add_child(sabotage)
+		row_labels[stock.symbol] = {"price": price, "change": change, "range": range, "shares": shares, "position": position, "buy": buy, "sell": sell, "pump": pump}
 	_update_stock_rows(state)
 
 func _update_stock_rows(state: GameState) -> void:
@@ -449,6 +440,10 @@ func _update_stock_rows(state: GameState) -> void:
 		var can_trade := state.phase == GameState.Phase.TRADING
 		labels["buy"].disabled = not can_trade
 		labels["sell"].disabled = not can_trade or shares <= 0
+		var pump_active := state.has_pumped(stock.symbol) and stock.pump_active
+		labels["pump"].text = "PUMP ON" if pump_active else "PUMP"
+		labels["pump"].tooltip_text = "ACTIVE: +4.0% live path; correction risk remains." if pump_active else "Spend £25.00 to lift this stock's live path."
+		labels["pump"].disabled = session.network_mode or not can_trade or pump_active or state.cash_pence < GameState.PUMP_COST_PENCE
 
 func _update_detail(state: GameState) -> void:
 	var stock := state.get_stock(selected_symbol)
@@ -460,15 +455,13 @@ func _update_detail(state: GameState) -> void:
 	detail_projection.add_theme_color_override("font_color", POSITIVE if stock.projection_change >= 0 else NEGATIVE)
 	detail_news.text = "FORECAST NEWS  %s" % stock.current_news
 	detail_shares.text = "Shares held: %d" % int(state.holdings[stock.symbol])
-	if pump_button != null:
-		pump_button.disabled = session.network_mode or state.phase != GameState.Phase.TRADING or state.has_pumped(stock.symbol) or state.cash_pence < GameState.PUMP_COST_PENCE
 	if pump_status != null:
 		if session.network_mode:
 			pump_status.text = "PUMP unavailable in multiplayer"
 		elif state.phase != GameState.Phase.TRADING:
 			pump_status.text = "PUMP UNAVAILABLE outside the trading phase"
-		elif state.has_pumped(stock.symbol):
-			pump_status.text = "PUMP USED for %s this round" % stock.symbol
+		elif state.has_pumped(stock.symbol) and stock.pump_active:
+			pump_status.text = "PUMP ACTIVE: +%.1f%% LIVE PATH | £25.00 SPENT | correction risk at resolution" % (stock.pump_live_boost * 100.0)
 		elif state.cash_pence < GameState.PUMP_COST_PENCE:
 			pump_status.text = "PUMP UNAVAILABLE | Need £25.00 cash"
 		else:
@@ -482,7 +475,6 @@ func _update_detail(state: GameState) -> void:
 			"color": StockData.color_for_index(index),
 		})
 	chart.set_series(chart_series)
-	_update_chart_legend(state)
 	_update_news_feed(state)
 
 func _round_change(stock: StockData) -> float:
@@ -525,19 +517,6 @@ func _update_news_feed(state: GameState) -> void:
 		item.custom_minimum_size.x = 300
 		news_feed.add_child(item)
 
-func _update_chart_legend(state: GameState) -> void:
-	if chart_legend == null:
-		return
-	for child in chart_legend.get_children():
-		child.queue_free()
-	for index in state.stocks.size():
-		var stock: StockData = state.stocks[index]
-		var item := _label("%s  %s  %s" % [stock.symbol, stock.company_name, _format_pence(stock.current_price_pence)], 11, StockData.color_for_index(index))
-		item.custom_minimum_size.x = 145
-		item.clip_text = true
-		item.tooltip_text = "%s %s" % [stock.symbol, stock.company_name]
-		chart_legend.add_child(item)
-
 func _select_stock(symbol: String) -> void:
 	selected_symbol = symbol
 	_refresh()
@@ -550,14 +529,57 @@ func _quick_sell(symbol: String) -> void:
 	selected_symbol = symbol
 	session.sell(symbol, 1)
 
-func _on_buy_detail() -> void:
-	session.buy(selected_symbol, int(quantity.value))
+func _quick_pump(symbol: String) -> void:
+	selected_symbol = symbol
+	session.pump(symbol)
 
-func _on_sell_detail() -> void:
-	session.sell(selected_symbol, int(quantity.value))
+func _open_pause_menu() -> void:
+	if pause_layer != null:
+		return
+	pause_layer = Control.new()
+	pause_layer.name = "PauseMenu"
+	pause_layer.process_mode = Node.PROCESS_MODE_ALWAYS
+	pause_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	pause_layer.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(pause_layer)
+	var shade := ColorRect.new()
+	shade.color = Color(0.02, 0.05, 0.08, 0.82)
+	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pause_layer.add_child(shade)
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	pause_layer.add_child(center)
+	var panel := _panel()
+	panel.custom_minimum_size = Vector2(280, 0)
+	center.add_child(panel)
+	var content := VBoxContainer.new()
+	content.add_theme_constant_override("separation", 10)
+	panel.add_child(content)
+	content.add_child(_label("PAUSED" if not session.network_mode else "MATCH MENU", 22, TEXT))
+	var resume := Button.new()
+	resume.text = "RESUME"
+	resume.pressed.connect(_close_pause_menu)
+	content.add_child(resume)
+	var exit := Button.new()
+	exit.text = "EXIT TO MAIN MENU"
+	exit.pressed.connect(_exit_to_main_menu)
+	content.add_child(exit)
+	if not session.network_mode:
+		get_tree().paused = true
 
-func _on_pump() -> void:
-	session.pump(selected_symbol)
+func _close_pause_menu() -> void:
+	if not session.network_mode:
+		get_tree().paused = false
+	if pause_layer != null:
+		pause_layer.queue_free()
+		pause_layer = null
+
+func _exit_to_main_menu() -> void:
+	if session.network_mode and session.network_lobby != null:
+		session.network_lobby.disconnect_lobby()
+	_close_pause_menu()
+	exit_to_main_menu_requested.emit()
 
 func _show_debrief(day: int, resolutions: Array[Dictionary]) -> void:
 	if debrief_panel != null:
@@ -578,61 +600,141 @@ func _show_debrief(day: int, resolutions: Array[Dictionary]) -> void:
 	margin.add_theme_constant_override("margin_right", 28)
 	margin.add_theme_constant_override("margin_bottom", 22)
 	debrief_layer.add_child(margin)
-	var scroll := ScrollContainer.new()
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	margin.add_child(scroll)
 	var page := VBoxContainer.new()
-	page.add_theme_constant_override("separation", 12)
+	page.add_theme_constant_override("separation", 8)
 	page.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(page)
+	page.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	margin.add_child(page)
 	debrief_panel = _panel()
 	debrief_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	debrief_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	page.add_child(debrief_panel)
 	var content := VBoxContainer.new()
 	content.add_theme_constant_override("separation", 8)
 	debrief_panel.add_child(content)
-	content.add_child(_label("DAY %d DEBRIEF" % day, 24, TEXT))
+	var title := _label("DAY %d DEBRIEF" % day, 22, TEXT)
+	title.custom_minimum_size.y = 28
+	content.add_child(title)
 	content.add_child(_label("Resolved prices, player result, action markers, and ranking.", 12, MUTED))
 	debrief_day_series = _day_graph_series(resolutions)
 	debrief_game_series = _game_graph_series()
-	content.add_child(_build_debrief_chart())
-	var results := VBoxContainer.new()
-	results.add_theme_constant_override("separation", 4)
-	content.add_child(results)
-	results.add_child(_label("RESOLVED NEWS AND ACTION MARKERS", 12, MUTED))
-	var round_record: Dictionary = session.completed_rounds.back() if not session.completed_rounds.is_empty() else {}
-	var player_result := int(round_record.get("player_return_pence", session.game_state.total_return_pence()))
-	results.add_child(_label("PLAYER RESULT  %s  |  PORTFOLIO %s  |  CASH %s" % [
-		_signed_pence(player_result),
-		_format_pence(int(round_record.get("player_portfolio_value_pence", session.game_state.portfolio_value_pence()))),
-		_format_pence(int(round_record.get("player_cash_pence", session.game_state.cash_pence))),
-	], 13, POSITIVE if player_result >= 0 else NEGATIVE))
-	results.add_child(_label("SABOTAGE: unavailable in this build", 11, MUTED))
-	for resolution in resolutions:
-		var change := float(resolution["percentage_change"]) * 100.0
-		var change_color := POSITIVE if change >= 0.0 else NEGATIVE
-		var row := _label(
-			"%s  %s -> %s  %+.1f%%\nRESOLVED NEWS  %s%s" % [
-				resolution["symbol"],
-				_format_pence(int(resolution["opening_price_pence"])),
-				_format_pence(int(resolution["closing_price_pence"])),
-				change,
-				resolution["news"],
-				"\nPUMP CORRECTION AFFECTED RESULT" if bool(resolution.get("pump_correction", false)) else ("\nPUMP RESOLVED WITHOUT CORRECTION" if bool(resolution.get("pump_used", false)) else ""),
-			],
-			12,
-			change_color,
-		)
-		row.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		results.add_child(row)
-		results.add_child(_label("PUMP MARKER: %s" % resolution["symbol"] if bool(resolution.get("pump_used", false)) else "PUMP MARKER: none", 11, ACCENT if bool(resolution.get("pump_used", false)) else MUTED))
-	content.add_child(_build_rankings_panel(_display_rankings()))
+	var chart_panel := _build_debrief_chart()
+	chart_panel.custom_minimum_size.y = 214
+	chart_panel.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	content.add_child(chart_panel)
+	var lower := HBoxContainer.new()
+	lower.add_theme_constant_override("separation", 10)
+	lower.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	content.add_child(lower)
+	lower.add_child(_build_debrief_news_panel(resolutions))
+	lower.add_child(_build_debrief_details_panel(resolutions))
+	var action_bar := HBoxContainer.new()
+	action_bar.custom_minimum_size.y = 42
+	action_bar.alignment = BoxContainer.ALIGNMENT_END
+	content.add_child(action_bar)
+	var action_spacer := Control.new()
+	action_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	action_bar.add_child(action_spacer)
 	if session.game_state.phase == GameState.Phase.DEBRIEF:
 		var next_day := Button.new()
 		next_day.text = "NEXT DAY"
-		next_day.custom_minimum_size.y = 38
+		next_day.custom_minimum_size = Vector2(150, 38)
 		next_day.pressed.connect(_continue_after_debrief)
-		content.add_child(next_day)
+		action_bar.add_child(next_day)
+
+func _build_debrief_news_panel(resolutions: Array[Dictionary]) -> Control:
+	var panel := _panel()
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.size_flags_stretch_ratio = 1.0
+	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var content := VBoxContainer.new()
+	content.add_theme_constant_override("separation", 5)
+	panel.add_child(content)
+	content.add_child(_label("NEWS FEED", 12, MUTED))
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	content.add_child(scroll)
+	var grid := GridContainer.new()
+	grid.columns = 4
+	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	grid.add_theme_constant_override("h_separation", 8)
+	grid.add_theme_constant_override("v_separation", 5)
+	for header in [
+		_column_label("STOCK", 62),
+		_column_label("RESOLVED STORY", 230),
+		_column_label("RESULT", 82),
+		_column_label("ACTION", 120),
+	]:
+		grid.add_child(header)
+	for resolution in resolutions:
+		var symbol := str(resolution["symbol"])
+		var color := _stock_color(symbol)
+		var stock_label := _label(symbol, 11, color)
+		stock_label.custom_minimum_size.x = 62
+		grid.add_child(stock_label)
+		var story := _label(str(resolution["news"]), 11, TEXT)
+		story.custom_minimum_size.x = 230
+		story.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		grid.add_child(story)
+		var change := float(resolution["percentage_change"]) * 100.0
+		var result := _label("%+.1f%%" % change, 11, POSITIVE if change >= 0.0 else NEGATIVE)
+		result.custom_minimum_size.x = 82
+		grid.add_child(result)
+		var action_text := "PUMP CORRECTION" if bool(resolution.get("pump_correction", false)) else ("PUMP USED" if bool(resolution.get("pump_used", false)) else "NONE")
+		var action := _label(action_text, 10, ACCENT if bool(resolution.get("pump_used", false)) else MUTED)
+		action.custom_minimum_size.x = 120
+		grid.add_child(action)
+	scroll.add_child(grid)
+	return panel
+
+func _build_debrief_details_panel(resolutions: Array[Dictionary]) -> Control:
+	var panel := _panel()
+	panel.custom_minimum_size.x = 430
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.size_flags_stretch_ratio = 1.0
+	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	panel.add_child(scroll)
+	var content := VBoxContainer.new()
+	content.add_theme_constant_override("separation", 5)
+	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(content)
+	content.add_child(_label("RESULT AND HOLDINGS", 12, MUTED))
+	var round_record: Dictionary = session.completed_rounds.back() if not session.completed_rounds.is_empty() else {}
+	var player_result := int(round_record.get("player_return_pence", session.game_state.total_return_pence()))
+	content.add_child(_label("PLAYER RESULT  %s" % _signed_pence(player_result), 13, POSITIVE if player_result >= 0 else NEGATIVE))
+	content.add_child(_label("PORTFOLIO  %s    CASH  %s" % [
+		_format_pence(int(round_record.get("player_portfolio_value_pence", session.game_state.portfolio_value_pence()))),
+		_format_pence(int(round_record.get("player_cash_pence", session.game_state.cash_pence))),
+	], 11, TEXT))
+	content.add_child(_label("SABOTAGE: unavailable in this build", 10, MUTED))
+	var result_grid := GridContainer.new()
+	result_grid.columns = 4
+	result_grid.add_theme_constant_override("h_separation", 7)
+	result_grid.add_theme_constant_override("v_separation", 4)
+	for header in [
+		_column_label("STOCK", 55),
+		_column_label("OPEN", 76),
+		_column_label("CLOSE", 76),
+		_column_label("CHANGE", 70),
+	]:
+		result_grid.add_child(header)
+	for resolution in resolutions:
+		var symbol := str(resolution["symbol"])
+		var change := float(resolution["percentage_change"]) * 100.0
+		for value in [
+			_label(symbol, 10, _stock_color(symbol)),
+			_label(_format_pence(int(resolution["opening_price_pence"])), 10, TEXT),
+			_label(_format_pence(int(resolution["closing_price_pence"])), 10, TEXT),
+			_label("%+.1f%%" % change, 10, POSITIVE if change >= 0.0 else NEGATIVE),
+		]:
+			result_grid.add_child(value)
+	content.add_child(result_grid)
+	content.add_child(_build_rankings_panel(_display_rankings()))
+	return panel
 
 func _continue_after_debrief() -> void:
 	if session.continue_to_next_day() and debrief_panel != null:
@@ -659,35 +761,54 @@ func _show_brief(day: int) -> void:
 	margin.add_theme_constant_override("margin_right", 28)
 	margin.add_theme_constant_override("margin_bottom", 22)
 	brief_layer.add_child(margin)
-	var scroll := ScrollContainer.new()
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	margin.add_child(scroll)
 	var page := VBoxContainer.new()
-	page.add_theme_constant_override("separation", 12)
+	page.add_theme_constant_override("separation", 8)
 	page.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(page)
+	page.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	margin.add_child(page)
 	brief_panel = _panel()
 	brief_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	brief_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	page.add_child(brief_panel)
 	var content := VBoxContainer.new()
 	content.add_theme_constant_override("separation", 8)
 	brief_panel.add_child(content)
-	content.add_child(_label("DAY %d BRIEF" % day, 24, TEXT))
+	var title := _label("DAY %d BRIEF" % day, 22, TEXT)
+	title.custom_minimum_size.y = 28
+	content.add_child(title)
 	content.add_child(_label("Review the next market stories, your holdings, and the match before trading starts.", 12, MUTED))
 	content.add_child(_next_day_outlook())
 	content.add_child(_label("YOUR HOLDINGS  |  CASH %s  |  %s" % [_format_pence(session.game_state.cash_pence), _holdings_text(session.game_state)], 13, TEXT))
 	content.add_child(_build_rankings_panel(_display_rankings()))
+	var action_bar := HBoxContainer.new()
+	action_bar.custom_minimum_size.y = 42
+	action_bar.alignment = BoxContainer.ALIGNMENT_END
+	content.add_child(action_bar)
 	var start_button := Button.new()
-	start_button.text = "START TRADING"
-	start_button.custom_minimum_size.y = 38
+	start_trading_button = start_button
+	start_button.custom_minimum_size = Vector2(170, 38)
 	start_button.pressed.connect(_start_trading_from_brief)
-	content.add_child(start_button)
+	action_bar.add_child(start_button)
+	_update_start_trading_button()
+
+func _update_start_trading_button() -> void:
+	if start_trading_button == null or session == null:
+		return
+	if not session.network_mode:
+		start_trading_button.text = "START TRADING"
+		start_trading_button.disabled = false
+		return
+	var ready_count := session.network_trading_ready_count
+	var total_count := session.network_trading_ready_total
+	start_trading_button.text = "START TRADING (%d/%d)" % [ready_count, total_count]
+	start_trading_button.disabled = session.network_local_trading_ready or total_count <= 0
 
 func _start_trading_from_brief() -> void:
 	if session.start_trading_round() and brief_panel != null:
 		brief_layer.queue_free()
 		brief_layer = null
 		brief_panel = null
+		start_trading_button = null
 
 func _on_run_completed(summary: Dictionary) -> void:
 	if summary_panel != null:
@@ -746,8 +867,6 @@ func _restart_run() -> void:
 	row_labels.clear()
 	news_history.clear()
 	for child in stock_list.get_children():
-		child.free()
-	for child in chart_legend.get_children():
 		child.free()
 	for child in news_feed.get_children():
 		child.free()
@@ -814,8 +933,31 @@ func _next_day_outlook() -> Control:
 	var panel := _panel()
 	var content := VBoxContainer.new()
 	content.add_child(_label("NEXT DAY STOCK STORIES / PROJECTIONS", 12, MUTED))
-	for stock in session.game_state.stocks:
-		content.add_child(_label("%s  %+.1f%% estimate  |  %s" % [stock.symbol, stock.projection_change * 100.0, stock.current_news], 11, TEXT))
+	var grid := GridContainer.new()
+	grid.columns = 3
+	grid.add_theme_constant_override("h_separation", 10)
+	grid.add_theme_constant_override("v_separation", 4)
+	for header in [
+		_column_label("STOCK", 70),
+		_column_label("STORY", 0),
+		_column_label("FORECAST", 150),
+	]:
+		header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		grid.add_child(header)
+	for stock_index in session.game_state.stocks.size():
+		var stock: StockData = session.game_state.stocks[stock_index]
+		var symbol := _label(stock.symbol, 11, StockData.color_for_index(stock_index))
+		symbol.custom_minimum_size.x = 70
+		grid.add_child(symbol)
+		var story := _label(stock.current_news, 11, StockData.color_for_index(stock_index))
+		story.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		story.clip_text = true
+		story.tooltip_text = stock.current_news
+		grid.add_child(story)
+		var forecast := _label("%+.1f%%  |  %+.1f%% to %+.1f%%" % [stock.projection_change * 100.0, stock.projection_low * 100.0, stock.projection_high * 100.0], 11, POSITIVE if stock.projection_change >= 0.0 else NEGATIVE)
+		forecast.custom_minimum_size.x = 150
+		grid.add_child(forecast)
+	content.add_child(grid)
 	panel.add_child(content)
 	return panel
 
@@ -834,19 +976,42 @@ func _build_rankings_panel(rankings: Array) -> Control:
 	var panel := _panel()
 	var content := VBoxContainer.new()
 	content.add_child(_label("RANKING", 12, MUTED))
+	var grid := GridContainer.new()
+	grid.columns = 6
+	grid.add_theme_constant_override("h_separation", 7)
+	grid.add_theme_constant_override("v_separation", 4)
+	for header in [
+		_column_label("#", 24),
+		_column_label("PLAYER", 70),
+		_column_label("CASH", 82),
+		_column_label("PORTFOLIO", 95),
+		_column_label("RETURN", 82),
+		_column_label("HOLDINGS", 0),
+	]:
+		header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		grid.add_child(header)
 	var rank := 1
 	for player in rankings:
-		content.add_child(_label("%d. PLAYER %s  CASH %s  PORTFOLIO %s  RETURN %s  HOLDINGS %s" % [
-			rank,
-			str(player.get("player_id", "?")),
-			_format_pence(int(player.get("cash_pence", 0))),
-			_format_pence(int(player.get("portfolio_value_pence", 0))),
-			_signed_pence(int(player.get("return_pence", 0))),
-			_holdings_text_from_dictionary(player.get("holdings", {})),
-		], 11, TEXT))
+		for value in [
+			_label("%d" % rank, 10, TEXT),
+			_label("PLAYER %s" % str(player.get("player_id", "?")), 10, TEXT),
+			_label(_format_pence(int(player.get("cash_pence", 0))), 10, TEXT),
+			_label(_format_pence(int(player.get("portfolio_value_pence", 0))), 10, TEXT),
+			_label(_signed_pence(int(player.get("return_pence", 0))), 10, POSITIVE if int(player.get("return_pence", 0)) >= 0 else NEGATIVE),
+			_label(_holdings_text_from_dictionary(player.get("holdings", {})), 10, TEXT),
+		]:
+			value.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			grid.add_child(value)
 		rank += 1
+	content.add_child(grid)
 	panel.add_child(content)
 	return panel
+
+func _stock_color(symbol: String) -> Color:
+	for index in session.game_state.stocks.size():
+		if session.game_state.stocks[index].symbol == symbol:
+			return StockData.color_for_index(index)
+	return MUTED
 
 func _holdings_text(state: GameState) -> String:
 	return _holdings_text_from_dictionary(state.holdings)

@@ -13,6 +13,7 @@ signal pump_rejected(pump_result: Dictionary)
 signal day_resolved(day_number: int, resolution_result: Array[Dictionary], state_snapshot: Dictionary)
 signal run_completed(summary: Dictionary)
 signal network_status_changed(message: String)
+signal network_readiness_changed(ready_count: int, total_count: int, local_ready: bool)
 
 const DEFAULT_SEED: int = 42_4242
 const DAY_LENGTH_SECONDS: float = 30.0
@@ -29,6 +30,9 @@ var network_is_host := false
 var network_local_player_id := 1
 var network_player_states: Dictionary = {}
 var network_ready_players: Dictionary = {}
+var network_trading_ready_count: int = 0
+var network_trading_ready_total: int = 0
+var network_local_trading_ready: bool = false
 var network_rankings: Array[Dictionary] = []
 var completed_rounds: Array[Dictionary] = []
 
@@ -58,6 +62,9 @@ func start_network_host(lobby: NetworkLobby, player_ids: Array[int], run_seed: i
 	network_local_player_id = 1
 	network_player_states.clear()
 	network_ready_players.clear()
+	network_trading_ready_count = 0
+	network_trading_ready_total = player_ids.size()
+	network_local_trading_ready = false
 	network_rankings.clear()
 	start_run(run_seed, GameState.DEFAULT_TOTAL_DAYS, GameState.DEFAULT_STOCK_COUNT)
 	for player_id in player_ids:
@@ -159,6 +166,7 @@ func start_trading_round() -> bool:
 	if network_mode and network_is_host:
 		network_ready_players[network_local_player_id] = true
 		if not _all_network_players_ready():
+			_publish_network_state()
 			network_status_changed.emit("Waiting for every player to start trading.")
 			return false
 		for player_id in network_ready_players:
@@ -189,6 +197,8 @@ func state_snapshot() -> Dictionary:
 			"current_news": stock.current_news,
 			"shares": int(game_state.holdings[stock.symbol]),
 			"pump_used": game_state.has_pumped(stock.symbol),
+			"pump_active": stock.pump_active,
+			"pump_live_boost": stock.pump_live_boost,
 		})
 	return {
 		"day": game_state.current_day,
@@ -198,6 +208,9 @@ func state_snapshot() -> Dictionary:
 		"portfolio_value_pence": game_state.portfolio_value_pence(),
 		"return_pence": game_state.total_return_pence(),
 		"stocks": stock_records,
+		"network_ready_count": network_trading_ready_count,
+		"network_ready_total": network_trading_ready_total,
+		"network_local_ready": network_local_trading_ready,
 		"completed_rounds": completed_rounds.duplicate(true),
 		"rankings": network_rankings.duplicate(true),
 	}
@@ -210,6 +223,10 @@ func apply_network_snapshot(snapshot: Dictionary) -> void:
 	game_state.current_day = int(market.get("day", game_state.current_day))
 	game_state.total_days = int(market.get("total_days", game_state.total_days))
 	game_state.phase = GameState.Phase.get(str(market.get("phase", "BRIEF")), GameState.Phase.BRIEF)
+	network_trading_ready_count = int(market.get("network_ready_count", 0))
+	network_trading_ready_total = int(market.get("network_ready_total", 0))
+	network_local_trading_ready = bool(market.get("network_local_ready", false))
+	network_readiness_changed.emit(network_trading_ready_count, network_trading_ready_total, network_local_trading_ready)
 	completed_rounds = market.get("completed_rounds", []).duplicate(true)
 	game_state.cash_pence = int(portfolio.get("cash_pence", game_state.cash_pence))
 	for symbol in game_state.holdings:
@@ -226,6 +243,8 @@ func apply_network_snapshot(snapshot: Dictionary) -> void:
 		stock.projected_price_pence = int(record.get("projected_price_pence", stock.current_price_pence))
 		stock.projection_direction = int(record.get("projection_direction", 0))
 		stock.projection_confidence = str(record.get("projection_confidence", ""))
+		stock.pump_active = bool(record.get("pump_active", false))
+		stock.pump_live_boost = float(record.get("pump_live_boost", 0.0))
 	network_rankings.clear()
 	for player in snapshot.get("players", []):
 		network_rankings.append(player.duplicate(true))
@@ -260,7 +279,15 @@ func _network_market_snapshot() -> Dictionary:
 			"projection_direction": stock.projection_direction,
 			"projection_confidence": stock.projection_confidence,
 		})
-	return {"day": game_state.current_day, "total_days": game_state.total_days, "phase": GameState.Phase.keys()[game_state.phase], "stocks": records, "completed_rounds": completed_rounds.duplicate(true)}
+	return {
+		"day": game_state.current_day,
+		"total_days": game_state.total_days,
+		"phase": GameState.Phase.keys()[game_state.phase],
+		"stocks": records,
+		"completed_rounds": completed_rounds.duplicate(true),
+		"network_ready_count": _network_ready_count(),
+		"network_ready_total": network_ready_players.size(),
+	}
 
 func _network_portfolio_snapshot(player_id: int) -> Dictionary:
 	var state: GameState = network_player_states[player_id]
@@ -270,8 +297,14 @@ func _publish_network_state() -> void:
 	if network_lobby == null or not network_is_host:
 		return
 	for player_id in network_player_states:
+		network_trading_ready_count = _network_ready_count()
+		network_trading_ready_total = network_ready_players.size()
+		network_local_trading_ready = bool(network_ready_players.get(network_local_player_id, false))
+		network_readiness_changed.emit(network_trading_ready_count, network_trading_ready_total, network_local_trading_ready)
 		network_rankings = _network_rankings()
-		var packet := {"market": _network_market_snapshot(), "portfolio": _network_portfolio_snapshot(player_id), "players": network_rankings.duplicate(true)}
+		var market_snapshot := _network_market_snapshot()
+		market_snapshot["network_local_ready"] = bool(network_ready_players.get(player_id, false))
+		var packet := {"market": market_snapshot, "portfolio": _network_portfolio_snapshot(player_id), "players": network_rankings.duplicate(true)}
 		if player_id == network_local_player_id:
 			apply_network_snapshot(packet)
 		else:
@@ -299,7 +332,15 @@ func _mark_network_player_ready_for_trading(player_id: int) -> void:
 	if _all_network_players_ready():
 		start_trading_round()
 	else:
+		_publish_network_state()
 		network_lobby.send_match_event({"type": "status", "message": "Player %d is ready to trade. Waiting for the rest." % player_id})
+
+func _network_ready_count() -> int:
+	var ready_count := 0
+	for player_id in network_ready_players:
+		if bool(network_ready_players[player_id]):
+			ready_count += 1
+	return ready_count
 
 func _all_network_players_ready() -> bool:
 	for player_id in network_player_states:

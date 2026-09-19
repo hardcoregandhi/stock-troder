@@ -86,6 +86,9 @@ func test_pump_requires_trading_phase_and_costs_fixed_cash() -> void:
 	assert_eq(result["cost_pence"], GameState.PUMP_COST_PENCE)
 	assert_eq(state.cash_pence, starting_cash - GameState.PUMP_COST_PENCE)
 	assert_true(result["correction_risk"])
+	assert_true(result["pump_active"])
+	assert_eq(result["live_boost"], 0.04)
+	assert_true(result["message"].contains("+4.0% live path"))
 
 func test_pump_is_once_per_stock_and_never_makes_cash_negative() -> void:
 	var state: GameState = GAME_STATE.new(123, 3)

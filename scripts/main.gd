@@ -21,6 +21,7 @@ func _ready() -> void:
 	_show_main_menu()
 
 func _show_main_menu() -> void:
+	get_tree().paused = false
 	if session != null:
 		session.queue_free()
 		session = null
@@ -46,6 +47,7 @@ func _start_single_player() -> void:
 	dashboard.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(dashboard)
 	dashboard.setup(session)
+	dashboard.exit_to_main_menu_requested.connect(_show_main_menu)
 	session.start_run()
 
 func _on_network_match_started(player_ids: Array[int], host: bool) -> void:
@@ -60,6 +62,7 @@ func _on_network_match_started(player_ids: Array[int], host: bool) -> void:
 	dashboard.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(dashboard)
 	dashboard.setup(session)
+	dashboard.exit_to_main_menu_requested.connect(_show_main_menu)
 	if host:
 		session.start_network_host(network_lobby, player_ids)
 	else:
