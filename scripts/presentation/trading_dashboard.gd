@@ -272,8 +272,6 @@ func _build_stock_header() -> void:
 		_column_label("SELL", 44),
 		_column_label("PUMP", 52),
 		_column_label("SABOTAGE", 70),
-		_column_label("FAKE+", 48),
-		_column_label("FAKE-", 48),
 	]:
 		stock_list.add_child(header)
 
@@ -403,19 +401,7 @@ func _build_stock_rows(state: GameState) -> void:
 		sabotage.custom_minimum_size.x = 70
 		sabotage.pressed.connect(_quick_sabotage.bind(stock.symbol))
 		stock_list.add_child(sabotage)
-		var fake_positive := Button.new()
-		fake_positive.text = "FAKE+"
-		fake_positive.tooltip_text = "Spend £75.00 to plant uncertain positive news."
-		fake_positive.custom_minimum_size.x = 48
-		fake_positive.pressed.connect(_quick_fake_news.bind(stock.symbol, 1))
-		stock_list.add_child(fake_positive)
-		var fake_negative := Button.new()
-		fake_negative.text = "FAKE-"
-		fake_negative.tooltip_text = "Spend £75.00 to plant uncertain negative news."
-		fake_negative.custom_minimum_size.x = 48
-		fake_negative.pressed.connect(_quick_fake_news.bind(stock.symbol, -1))
-		stock_list.add_child(fake_negative)
-		row_labels[stock.symbol] = {"price": price, "change": change, "range": range, "shares": shares, "position": position, "buy": buy, "sell": sell, "pump": pump, "sabotage": sabotage, "fake_positive": fake_positive, "fake_negative": fake_negative}
+		row_labels[stock.symbol] = {"price": price, "change": change, "range": range, "shares": shares, "position": position, "buy": buy, "sell": sell, "pump": pump, "sabotage": sabotage}
 	_update_stock_rows(state)
 
 func _update_stock_rows(state: GameState) -> void:
@@ -440,11 +426,6 @@ func _update_stock_rows(state: GameState) -> void:
 		labels["sabotage"].text = "SAB ON" if sabotage_active else "SABOTAGE"
 		labels["sabotage"].tooltip_text = "ACTIVE: negative live pressure; resolution risk remains." if sabotage_active else "Spend £50.00 to add negative live pressure."
 		labels["sabotage"].disabled = session.network_mode or not can_trade or sabotage_active or state.cash_pence < GameState.SABOTAGE_COST_PENCE
-		var fake_used := state.has_planted_fake_news(stock.symbol) and stock.fake_news_active
-		labels["fake_positive"].text = "FAKE+ ON" if fake_used and stock.fake_news_direction > 0 else "FAKE+"
-		labels["fake_negative"].text = "FAKE- ON" if fake_used and stock.fake_news_direction < 0 else "FAKE-"
-		labels["fake_positive"].disabled = session.network_mode or not can_trade or fake_used or state.cash_pence < GameState.FAKE_NEWS_COST_PENCE
-		labels["fake_negative"].disabled = session.network_mode or not can_trade or fake_used or state.cash_pence < GameState.FAKE_NEWS_COST_PENCE
 
 func _update_market_surface(state: GameState) -> void:
 	var chart_series: Array[Dictionary] = []
@@ -924,13 +905,15 @@ func _next_day_outlook() -> Control:
 	var content := VBoxContainer.new()
 	content.add_child(_label("NEXT DAY STOCK STORIES / PROJECTIONS", 12, MUTED))
 	var grid := GridContainer.new()
-	grid.columns = 3
+	grid.columns = 5
 	grid.add_theme_constant_override("h_separation", 10)
 	grid.add_theme_constant_override("v_separation", 4)
 	for header in [
 		_column_label("STOCK", 70),
 		_column_label("STORY", 0),
 		_column_label("FORECAST", 150),
+		_column_label("FAKE+", 60),
+		_column_label("FAKE-", 60),
 	]:
 		header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		grid.add_child(header)
@@ -947,6 +930,20 @@ func _next_day_outlook() -> Control:
 		var forecast := _label("%+.1f%%  |  %+.1f%% to %+.1f%%" % [stock.projection_change * 100.0, stock.projection_low * 100.0, stock.projection_high * 100.0], 11, POSITIVE if stock.projection_change >= 0.0 else NEGATIVE)
 		forecast.custom_minimum_size.x = 150
 		grid.add_child(forecast)
+		var fake_positive := Button.new()
+		fake_positive.text = "FAKE+"
+		fake_positive.custom_minimum_size.x = 60
+		fake_positive.tooltip_text = "Plant uncertain positive news for £75."
+		fake_positive.pressed.connect(_quick_fake_news.bind(stock.symbol, 1))
+		fake_positive.disabled = session.network_mode or session.game_state.has_planted_fake_news(stock.symbol) or session.game_state.cash_pence < GameState.FAKE_NEWS_COST_PENCE
+		grid.add_child(fake_positive)
+		var fake_negative := Button.new()
+		fake_negative.text = "FAKE-"
+		fake_negative.custom_minimum_size.x = 60
+		fake_negative.tooltip_text = "Plant uncertain negative news for £75."
+		fake_negative.pressed.connect(_quick_fake_news.bind(stock.symbol, -1))
+		fake_negative.disabled = session.network_mode or session.game_state.has_planted_fake_news(stock.symbol) or session.game_state.cash_pence < GameState.FAKE_NEWS_COST_PENCE
+		grid.add_child(fake_negative)
 	content.add_child(grid)
 	panel.add_child(content)
 	return panel
