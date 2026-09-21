@@ -110,6 +110,7 @@ func setup(new_session: TradingSession) -> void:
 	session.sabotage_rejected.connect(_on_trade_result)
 	session.fake_news_completed.connect(_on_trade_result)
 	session.fake_news_rejected.connect(_on_trade_result)
+	session.computer_action_completed.connect(_on_computer_action)
 	session.run_completed.connect(_on_run_completed)
 	session.network_status_changed.connect(_on_network_status_changed)
 	session.network_readiness_changed.connect(_on_network_readiness_changed)
@@ -192,8 +193,8 @@ func _build_market_panel() -> Control:
 	chart.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	content.add_child(chart)
 	stock_list = GridContainer.new()
-	stock_list.columns = 11
-	stock_list.custom_minimum_size.x = 758
+	stock_list.columns = 7
+	stock_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	stock_list.add_theme_constant_override("h_separation", 6)
 	stock_list.add_theme_constant_override("v_separation", 5)
 	_build_stock_header()
@@ -270,19 +271,13 @@ func _forward_button(text: String, minimum_size: Vector2) -> Button:
 
 func _build_stock_header() -> void:
 	for header in [
-		_column_label("SYMBOL", 50),
-		_column_label("COMPANY", 110),
-		_column_label("LIVE", 68),
+		_column_label("STOCK", 100),
+		_column_label("LIVE", 62),
 		_column_label("ROUND", 58),
 		_column_label("EST. RANGE", 90),
-		_column_label("SHARES", 42),
-		_column_label("POSITION", 72),
-		_column_label("BUY", 44),
-		_column_label("SELL", 44),
-		_column_label("PUMP", 52),
-		_column_label("SABOTAGE", 70),
-		_column_label("HYPE", 52),
-		_column_label("FUD", 44),
+		_column_label("POSITION", 86),
+		_column_label("TRADE", 96),
+		_column_label("MARKET ACTIONS", 210),
 	]:
 		stock_list.add_child(header)
 
@@ -338,6 +333,20 @@ func _on_trade_result(result: Dictionary) -> void:
 	trade_feedback.add_theme_color_override("font_color", POSITIVE if result["success"] else NEGATIVE)
 	if bool(result.get("success", false)):
 		_append_action_news(result)
+	_refresh()
+
+func _on_computer_action(player_name: String, risk_profile: String, result: Dictionary) -> void:
+	news_history.append({
+		"day": session.game_state.current_day,
+		"symbol": str(result.get("symbol", "")),
+		"text": "%s (%s): %s" % [player_name, risk_profile, str(result.get("message", ""))],
+		"resolved": false,
+		"change": 0.0,
+		"source": "AI ACTION",
+		"color": _stock_color(str(result.get("symbol", ""))),
+	})
+	if news_history.size() > 18:
+		news_history = news_history.slice(news_history.size() - 18)
 	_refresh()
 
 func _append_action_news(result: Dictionary) -> void:
@@ -398,16 +407,12 @@ func _refresh() -> void:
 func _build_stock_rows(state: GameState) -> void:
 	for stock in state.stocks:
 		var symbol := _label(stock.symbol, 12, StockData.color_for_index(state.stocks.find(stock)))
-		symbol.custom_minimum_size.x = 50
+		symbol.custom_minimum_size.x = 100
+		symbol.text = "%s  %s" % [stock.symbol, stock.company_name]
+		symbol.tooltip_text = stock.company_name
 		stock_list.add_child(symbol)
-		var company := _label(stock.company_name, 12, TEXT)
-		company.add_theme_color_override("font_color", StockData.color_for_index(state.stocks.find(stock)))
-		company.custom_minimum_size.x = 110
-		company.clip_text = true
-		company.tooltip_text = stock.company_name
-		stock_list.add_child(company)
 		var price := _label("", 13, TEXT)
-		price.custom_minimum_size.x = 68
+		price.custom_minimum_size.x = 62
 		stock_list.add_child(price)
 		var change := _label("", 12, ACCENT)
 		change.custom_minimum_size.x = 58
@@ -416,50 +421,53 @@ func _build_stock_rows(state: GameState) -> void:
 		range.custom_minimum_size.x = 90
 		range.clip_text = true
 		stock_list.add_child(range)
-		var shares := _label("", 11, TEXT)
-		shares.custom_minimum_size.x = 42
-		stock_list.add_child(shares)
 		var position := _label("", 11, TEXT)
-		position.custom_minimum_size.x = 72
+		position.custom_minimum_size.x = 86
 		position.clip_text = true
 		stock_list.add_child(position)
+		var trade_actions := HBoxContainer.new()
+		trade_actions.add_theme_constant_override("separation", 3)
 		var buy := Button.new()
 		buy.text = "BUY"
 		buy.tooltip_text = "Buy one share"
-		buy.custom_minimum_size.x = 44
+		buy.custom_minimum_size = Vector2(45, 28)
 		buy.pressed.connect(_quick_buy.bind(stock.symbol))
-		stock_list.add_child(buy)
+		trade_actions.add_child(buy)
 		var sell := Button.new()
 		sell.text = "SELL"
 		sell.tooltip_text = "Sell one share"
-		sell.custom_minimum_size.x = 44
+		sell.custom_minimum_size = Vector2(45, 28)
 		sell.pressed.connect(_quick_sell.bind(stock.symbol))
-		stock_list.add_child(sell)
+		trade_actions.add_child(sell)
+		stock_list.add_child(trade_actions)
+		var market_actions := HBoxContainer.new()
+		market_actions.add_theme_constant_override("separation", 3)
 		var pump := Button.new()
 		pump.text = "PUMP"
 		pump.tooltip_text = "Spend £25.00 to lift this stock's live path."
-		pump.custom_minimum_size.x = 52
+		pump.custom_minimum_size = Vector2(50, 28)
 		pump.pressed.connect(_quick_pump.bind(stock.symbol))
-		stock_list.add_child(pump)
+		market_actions.add_child(pump)
 		var sabotage := Button.new()
-		sabotage.text = "SABOTAGE"
+		sabotage.text = "SAB"
 		sabotage.tooltip_text = "Spend £50.00 to add negative live pressure. Resolution risk remains."
-		sabotage.custom_minimum_size.x = 70
+		sabotage.custom_minimum_size = Vector2(42, 28)
 		sabotage.pressed.connect(_quick_sabotage.bind(stock.symbol))
-		stock_list.add_child(sabotage)
+		market_actions.add_child(sabotage)
 		var hype := Button.new()
 		hype.text = "HYPE"
 		hype.tooltip_text = "Plant uncertain positive news for £75.00."
-		hype.custom_minimum_size.x = 52
+		hype.custom_minimum_size = Vector2(50, 28)
 		hype.pressed.connect(_quick_fake_news.bind(stock.symbol, 1))
-		stock_list.add_child(hype)
+		market_actions.add_child(hype)
 		var fud := Button.new()
 		fud.text = "FUD"
 		fud.tooltip_text = "Plant uncertain negative news for £75.00."
-		fud.custom_minimum_size.x = 44
+		fud.custom_minimum_size = Vector2(44, 28)
 		fud.pressed.connect(_quick_fake_news.bind(stock.symbol, -1))
-		stock_list.add_child(fud)
-		row_labels[stock.symbol] = {"price": price, "change": change, "range": range, "shares": shares, "position": position, "buy": buy, "sell": sell, "pump": pump, "sabotage": sabotage, "hype": hype, "fud": fud}
+		market_actions.add_child(fud)
+		stock_list.add_child(market_actions)
+		row_labels[stock.symbol] = {"price": price, "change": change, "range": range, "shares": null, "position": position, "buy": buy, "sell": sell, "pump": pump, "sabotage": sabotage, "hype": hype, "fud": fud}
 	_update_stock_rows(state)
 
 func _update_stock_rows(state: GameState) -> void:
@@ -471,8 +479,7 @@ func _update_stock_rows(state: GameState) -> void:
 		labels["change"].add_theme_color_override("font_color", POSITIVE if round_change >= 0 else NEGATIVE)
 		labels["range"].text = "%+.1f%% to %+.1f%%" % [stock.projection_low * 100.0, stock.projection_high * 100.0]
 		var shares := int(state.holdings[stock.symbol])
-		labels["shares"].text = "%d" % shares
-		labels["position"].text = _format_pence(stock.current_price_pence * shares)
+		labels["position"].text = "%d shares  %s" % [shares, _format_pence(stock.current_price_pence * shares)]
 		var can_trade := state.phase == GameState.Phase.TRADING
 		labels["buy"].disabled = not can_trade
 		labels["sell"].disabled = not can_trade or shares <= 0
@@ -557,7 +564,7 @@ func _news_entry_matches_filter(entry: Dictionary) -> bool:
 		1:
 			return source == "PLAYER TRADE"
 		2:
-			return source in ["PUMP", "SABOTAGE", "FAKE_NEWS"]
+			return source in ["PUMP", "SABOTAGE", "FAKE_NEWS", "AI ACTION"]
 		3:
 			return not resolved and source not in ["PLAYER TRADE", "PUMP", "SABOTAGE", "FAKE_NEWS"]
 		4:
@@ -1065,7 +1072,7 @@ func _build_rankings_panel(rankings: Array) -> Control:
 	for player in rankings:
 		for value in [
 			_label("%d" % rank, 10, TEXT),
-			_label("PLAYER %s" % str(player.get("player_id", "?")), 10, TEXT),
+			_label("%s  [%s]" % [str(player.get("display_name", "PLAYER %s" % str(player.get("player_id", "?")))), str(player.get("risk_profile", "HUMAN"))], 10, TEXT),
 			_label(_format_pence(int(player.get("cash_pence", 0))), 10, TEXT),
 			_label(_format_pence(int(player.get("portfolio_value_pence", 0))), 10, TEXT),
 			_label(_signed_pence(int(player.get("return_pence", 0))), 10, POSITIVE if int(player.get("return_pence", 0)) >= 0 else NEGATIVE),

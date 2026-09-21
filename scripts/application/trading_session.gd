@@ -14,6 +14,7 @@ signal sabotage_completed(sabotage_result: Dictionary)
 signal sabotage_rejected(sabotage_result: Dictionary)
 signal fake_news_completed(fake_news_result: Dictionary)
 signal fake_news_rejected(fake_news_result: Dictionary)
+signal computer_action_completed(player_name: String, risk_profile: String, action_result: Dictionary)
 signal day_resolved(day_number: int, resolution_result: Array[Dictionary], state_snapshot: Dictionary)
 signal run_completed(summary: Dictionary)
 signal network_status_changed(message: String)
@@ -39,6 +40,8 @@ var network_trading_ready_total: int = 0
 var network_local_trading_ready: bool = false
 var network_rankings: Array[Dictionary] = []
 var completed_rounds: Array[Dictionary] = []
+var computer_players: Array[ComputerPlayer] = []
+var computer_player_states: Dictionary = {}
 
 func _ready() -> void:
 	day_timer = DayTimer.new()
@@ -47,7 +50,7 @@ func _ready() -> void:
 	day_timer.time_updated.connect(_on_time_updated)
 	day_timer.timed_out.connect(_on_day_timer_timed_out)
 
-func start_run(run_seed: int = DEFAULT_SEED, run_total_days: int = GameState.DEFAULT_TOTAL_DAYS, stock_count: int = GameState.DEFAULT_STOCK_COUNT) -> void:
+func start_run(run_seed: int = DEFAULT_SEED, run_total_days: int = GameState.DEFAULT_TOTAL_DAYS, stock_count: int = GameState.DEFAULT_STOCK_COUNT, include_computer_players: bool = true) -> void:
 	if day_timer == null:
 		return
 	day_timer.stop()
@@ -56,8 +59,24 @@ func start_run(run_seed: int = DEFAULT_SEED, run_total_days: int = GameState.DEF
 	trade_service = TradeService.new()
 	market_sample_elapsed = 0.0
 	completed_rounds.clear()
+	computer_players.clear()
+	computer_player_states.clear()
+	if include_computer_players:
+		_create_computer_players(run_seed)
 	run_started.emit(state_snapshot())
 	_prepare_day()
+
+func _create_computer_players(run_seed: int) -> void:
+	var profiles := ["CONSERVATIVE", "BALANCED", "AGGRESSIVE"]
+	var names := ["Mara", "Quinn", "Rook"]
+	for index in profiles.size():
+		var player_id := index + 2
+		var player := ComputerPlayer.new(player_id, names[index], profiles[index], run_seed + player_id * 997)
+		var state: GameState = GameState.create_default(run_seed, game_state.total_days, game_state.stock_count)
+		state.stocks = game_state.stocks
+		state.phase = game_state.phase
+		computer_players.append(player)
+		computer_player_states[player_id] = state
 
 func start_network_host(lobby: NetworkLobby, player_ids: Array[int], run_seed: int = DEFAULT_SEED) -> void:
 	network_lobby = lobby
@@ -70,7 +89,7 @@ func start_network_host(lobby: NetworkLobby, player_ids: Array[int], run_seed: i
 	network_trading_ready_total = player_ids.size()
 	network_local_trading_ready = false
 	network_rankings.clear()
-	start_run(run_seed, GameState.DEFAULT_TOTAL_DAYS, GameState.DEFAULT_STOCK_COUNT)
+	start_run(run_seed, GameState.DEFAULT_TOTAL_DAYS, GameState.DEFAULT_STOCK_COUNT, false)
 	for player_id in player_ids:
 		var player_state: GameState = game_state if player_id == network_local_player_id else GameState.create_default(run_seed, game_state.total_days)
 		player_state.stocks = game_state.stocks
@@ -185,6 +204,10 @@ func continue_to_next_day() -> bool:
 		player_state.current_day = game_state.current_day
 		player_state.phase = game_state.phase
 		player_state.reset_round_manipulations()
+	for player_state in computer_player_states.values():
+		player_state.current_day = game_state.current_day
+		player_state.phase = game_state.phase
+		player_state.reset_round_manipulations()
 	_prepare_day()
 	if network_mode and network_is_host:
 		_publish_network_state()
@@ -207,6 +230,8 @@ func start_trading_round() -> bool:
 	if not market_simulator.start_trading(game_state):
 		return false
 	day_timer.start(DAY_LENGTH_SECONDS)
+	for player_state in computer_player_states.values():
+		player_state.phase = GameState.Phase.TRADING
 	if network_mode and network_is_host:
 		for player_state in network_player_states.values():
 			player_state.phase = GameState.Phase.TRADING
@@ -395,6 +420,9 @@ func _pending_network_trade(symbol: String, quantity: int) -> Dictionary:
 func _prepare_day() -> void:
 	market_sample_elapsed = 0.0
 	var projections := market_simulator.prepare_day(game_state)
+	for player_state in computer_player_states.values():
+		player_state.phase = game_state.phase
+	network_rankings = _network_rankings()
 	var news: Array[Dictionary] = []
 	for projection in projections:
 		news.append({"symbol": projection["symbol"], "text": projection["news"]})
@@ -408,6 +436,12 @@ func _prepare_day() -> void:
 func _process(delta: float) -> void:
 	if game_state == null or game_state.phase != GameState.Phase.TRADING or not day_timer.running:
 		return
+	for computer_player in computer_players:
+		var computer_state: GameState = computer_player_states[computer_player.player_id]
+		var action_result := computer_player.tick(delta, computer_state, trade_service)
+		if not action_result.is_empty() and bool(action_result.get("success", false)):
+			computer_action_completed.emit(computer_player.display_name, computer_player.risk_profile, action_result)
+			network_rankings = _network_rankings()
 	market_sample_elapsed += delta
 	while market_sample_elapsed >= MARKET_SAMPLE_INTERVAL_SECONDS:
 		market_sample_elapsed -= MARKET_SAMPLE_INTERVAL_SECONDS
@@ -434,6 +468,10 @@ func _on_day_timer_timed_out() -> void:
 			player_state.phase = game_state.phase
 			if is_final_day:
 				trade_service.liquidate_all(player_state)
+	for player_state in computer_player_states.values():
+		player_state.phase = game_state.phase
+		if is_final_day:
+			trade_service.liquidate_all(player_state)
 	day_resolved.emit(resolved_day, resolutions, state_snapshot())
 	if network_mode and network_is_host:
 		_publish_network_state()
@@ -512,11 +550,16 @@ func _percentage_change(opening_price_pence: int, closing_price_pence: int) -> f
 
 func _network_rankings() -> Array[Dictionary]:
 	var rankings: Array[Dictionary] = []
-	var states := network_player_states if network_mode and network_is_host else {network_local_player_id: game_state}
+	var states: Dictionary = network_player_states if network_mode and network_is_host else {network_local_player_id: game_state}
+	if not network_mode:
+		for player_id in computer_player_states:
+			states[player_id] = computer_player_states[player_id]
 	for player_id in states:
 		var player_state: GameState = states[player_id]
 		rankings.append({
 			"player_id": int(player_id),
+			"display_name": "You" if int(player_id) == network_local_player_id else _computer_name(int(player_id)),
+			"risk_profile": "HUMAN" if int(player_id) == network_local_player_id else _computer_profile(int(player_id)),
 			"cash_pence": player_state.cash_pence,
 			"portfolio_value_pence": player_state.portfolio_value_pence(),
 			"return_pence": player_state.total_return_pence(),
@@ -524,3 +567,15 @@ func _network_rankings() -> Array[Dictionary]:
 		})
 	rankings.sort_custom(func(left: Dictionary, right: Dictionary) -> bool: return int(left["return_pence"]) > int(right["return_pence"]))
 	return rankings
+
+func _computer_name(player_id: int) -> String:
+	for player in computer_players:
+		if player.player_id == player_id:
+			return player.display_name
+	return "PLAYER %d" % player_id
+
+func _computer_profile(player_id: int) -> String:
+	for player in computer_players:
+		if player.player_id == player_id:
+			return player.risk_profile
+	return "AI"
