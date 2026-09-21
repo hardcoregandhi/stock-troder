@@ -165,7 +165,7 @@ func _build_ui() -> void:
 	market_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	dashboard_body.add_child(market_panel)
 	var news_panel := _build_news_panel()
-	news_panel.custom_minimum_size.x = 380
+	news_panel.custom_minimum_size.x = 280
 	news_panel.size_flags_horizontal = Control.SIZE_SHRINK_END
 	secondary_panel = news_panel
 	dashboard_body.add_child(news_panel)
@@ -180,10 +180,12 @@ func _apply_responsive_layout() -> void:
 		return
 	var viewport_size := size
 	var compact := viewport_size.x < 1500.0
+	var narrow := viewport_size.x < 1350.0
 	if secondary_panel != null:
-		secondary_panel.visible = not compact
+		secondary_panel.visible = not narrow
+		secondary_panel.custom_minimum_size.x = 280.0 if compact else 380.0
 	var viewport_height := viewport_size.y
-	chart.custom_minimum_size.y = 102.0 if compact else clampf(viewport_height * 0.28, 220.0, 330.0)
+	chart.custom_minimum_size.y = 102.0 if compact else clampf(viewport_height * 0.38, 300.0, 520.0)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
@@ -248,7 +250,7 @@ func _build_market_panel() -> Control:
 	stock_list.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	stock_list.custom_minimum_size.y = 0
 	stock_list.add_theme_constant_override("h_separation", 6)
-	stock_list.add_theme_constant_override("v_separation", 5)
+	stock_list.add_theme_constant_override("v_separation", 8)
 	_build_stock_header()
 	content.add_child(stock_list)
 	trade_feedback = _label("Select a row to trade one share.", 12, MUTED)
@@ -272,8 +274,8 @@ func _build_news_panel() -> Control:
 	news_tab.name = "NEWS"
 	news_tab.add_theme_constant_override("separation", 8)
 	secondary_tabs.add_child(news_tab)
-	news_tab.add_child(_label("LIVE NEWS", 12, MUTED))
-	news_tab.add_child(_label("Trades, forecasts, actions, and resolved stories.", 11, MUTED))
+	news_tab.add_child(_label("LIVE NEWS", 14, MUTED))
+	news_tab.add_child(_label("Trades, forecasts, actions, and resolved stories.", 12, MUTED))
 	news_filter = OptionButton.new()
 	news_filter.add_item("ALL EVENTS", 0)
 	news_filter.add_item("TRADES", 1)
@@ -293,7 +295,7 @@ func _build_news_panel() -> Control:
 	secondary_tabs.add_child(players_tab)
 	players_tab.add_child(_label("PLAYERS", 12, MUTED))
 	players_tab.add_child(_label("Visible positions for counter-strategy.", 11, MUTED))
-	opponent_holdings_label = _label("PLAYERS\nLoading portfolios...", 10, TEXT)
+	opponent_holdings_label = _label("PLAYERS\nLoading portfolios...", 12, TEXT)
 	opponent_holdings_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	players_tab.add_child(opponent_holdings_label)
 	return panel
@@ -348,7 +350,7 @@ func _build_stock_header() -> void:
 		_column_label("EST. RANGE", 90),
 		_column_label("POSITION", 86),
 		_column_label("TRADE", 96),
-		_column_label("MARKET ACTIONS", 210),
+		_column_label("MARKET ACTIONS", 318),
 	]:
 		stock_list.add_child(header)
 
@@ -516,71 +518,65 @@ func _build_stock_rows(state: GameState) -> void:
 		stock_list.add_child(change)
 		var range := _label("", 11, ACCENT)
 		range.custom_minimum_size.x = 90
-		range.clip_text = true
+		range.autowrap_mode = TextServer.AUTOWRAP_OFF
 		stock_list.add_child(range)
 		var position := _label("", 11, TEXT)
 		position.custom_minimum_size.x = 86
-		position.clip_text = true
+		position.autowrap_mode = TextServer.AUTOWRAP_OFF
 		stock_list.add_child(position)
 		var trade_actions := HBoxContainer.new()
 		trade_actions.add_theme_constant_override("separation", 3)
 		var buy := Button.new()
 		buy.text = "BUY"
 		buy.tooltip_text = "Buy one share"
-		buy.custom_minimum_size = Vector2(45, 28)
+		buy.custom_minimum_size = Vector2(50, 34)
 		buy.pressed.connect(_quick_buy.bind(stock.symbol))
 		trade_actions.add_child(buy)
 		var sell := Button.new()
 		sell.text = "SELL"
 		sell.tooltip_text = "Sell one share"
-		sell.custom_minimum_size = Vector2(45, 28)
+		sell.custom_minimum_size = Vector2(50, 34)
 		sell.pressed.connect(_quick_sell.bind(stock.symbol))
 		trade_actions.add_child(sell)
 		stock_list.add_child(trade_actions)
-		var market_actions := VBoxContainer.new()
+		var market_actions := HBoxContainer.new()
 		market_actions.add_theme_constant_override("separation", 3)
-		var manipulation_actions := HBoxContainer.new()
-		manipulation_actions.add_theme_constant_override("separation", 3)
 		var pump := Button.new()
 		pump.text = "PUMP"
 		pump.tooltip_text = "Spend £25.00 to lift this stock's live path."
-		pump.custom_minimum_size = Vector2(50, 28)
+		pump.custom_minimum_size = Vector2(54, 34)
 		pump.pressed.connect(_quick_pump.bind(stock.symbol))
-		manipulation_actions.add_child(pump)
+		market_actions.add_child(pump)
 		var sabotage := Button.new()
 		sabotage.text = "SAB"
 		sabotage.tooltip_text = "Spend £50.00 to add negative live pressure. Resolution risk remains."
-		sabotage.custom_minimum_size = Vector2(42, 28)
+		sabotage.custom_minimum_size = Vector2(42, 34)
 		sabotage.pressed.connect(_quick_sabotage.bind(stock.symbol))
-		manipulation_actions.add_child(sabotage)
+		market_actions.add_child(sabotage)
 		var hype := Button.new()
 		hype.text = "HYPE"
 		hype.tooltip_text = "Plant uncertain positive news for £75.00."
-		hype.custom_minimum_size = Vector2(50, 28)
+		hype.custom_minimum_size = Vector2(54, 34)
 		hype.pressed.connect(_quick_fake_news.bind(stock.symbol, 1))
-		manipulation_actions.add_child(hype)
+		market_actions.add_child(hype)
 		var fud := Button.new()
 		fud.text = "FUD"
 		fud.tooltip_text = "Plant uncertain negative news for £75.00."
-		fud.custom_minimum_size = Vector2(44, 28)
+		fud.custom_minimum_size = Vector2(48, 34)
 		fud.pressed.connect(_quick_fake_news.bind(stock.symbol, -1))
-		manipulation_actions.add_child(fud)
-		market_actions.add_child(manipulation_actions)
-		var option_actions := HBoxContainer.new()
-		option_actions.add_theme_constant_override("separation", 3)
+		market_actions.add_child(fud)
 		var call := Button.new()
 		call.text = "CALL"
 		call.tooltip_text = "Buy a one-round call at the current price. Premium is 8%."
-		call.custom_minimum_size = Vector2(62, 28)
+		call.custom_minimum_size = Vector2(62, 34)
 		call.pressed.connect(_quick_call.bind(stock.symbol))
-		option_actions.add_child(call)
 		var put := Button.new()
 		put.text = "PUT"
 		put.tooltip_text = "Buy a one-round put at the current price. Premium is 8%."
-		put.custom_minimum_size = Vector2(55, 28)
+		put.custom_minimum_size = Vector2(55, 34)
 		put.pressed.connect(_quick_put.bind(stock.symbol))
-		option_actions.add_child(put)
-		market_actions.add_child(option_actions)
+		market_actions.add_child(call)
+		market_actions.add_child(put)
 		stock_list.add_child(market_actions)
 		row_labels[stock.symbol] = {"price": price, "change": change, "range": range, "shares": null, "position": position, "buy": buy, "sell": sell, "pump": pump, "sabotage": sabotage, "hype": hype, "fud": fud, "call": call, "put": put}
 	_update_stock_rows(state)
@@ -603,7 +599,7 @@ func _update_stock_rows(state: GameState) -> void:
 		labels["pump"].tooltip_text = "ACTIVE: +4.0% live path; correction risk remains." if pump_active else "Spend £25.00 to lift this stock's live path."
 		labels["pump"].disabled = not can_trade or pump_active or state.action_on_cooldown("pump", stock.symbol) or state.cash_pence < GameState.PUMP_COST_PENCE
 		var sabotage_active := state.has_sabotaged(stock.symbol) and stock.sabotage_active
-		labels["sabotage"].text = "SAB ON" if sabotage_active else "SABOTAGE"
+		labels["sabotage"].text = "SAB ON" if sabotage_active else "SAB"
 		labels["sabotage"].tooltip_text = "ACTIVE: negative live pressure; resolution risk remains." if sabotage_active else "Spend £50.00 to add negative live pressure."
 		labels["sabotage"].disabled = not can_trade or sabotage_active or state.action_on_cooldown("sabotage", stock.symbol) or state.cash_pence < GameState.SABOTAGE_COST_PENCE
 		var fake_news_active := state.has_planted_fake_news(stock.symbol) and stock.fake_news_active
