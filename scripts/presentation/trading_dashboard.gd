@@ -347,7 +347,7 @@ func _append_action_news(result: Dictionary) -> void:
 	if action == "trade":
 		var verb := "BOUGHT" if int(result.get("quantity", 0)) > 0 and text.begins_with("Bought") else "SOLD"
 		text = "%s %d %s" % [verb, absi(int(result.get("quantity", 0))), symbol]
-	news_history.append({
+		news_history.append({
 			"day": session.game_state.current_day,
 			"symbol": symbol,
 			"text": text,
