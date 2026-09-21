@@ -39,6 +39,23 @@ var opponent_holdings_label: Label
 var news_history: Array[Dictionary] = []
 var pause_layer: Control
 var start_trading_button: Button
+var responsive_page: Control
+var dashboard_body: HBoxContainer
+var secondary_tabs: TabContainer
+var secondary_panel: Control
+
+class ResponsiveShell extends Control:
+	var content: Control
+	var max_content_width: float = 2880.0
+	var horizontal_gutter: float = 28.0
+
+	func _notification(what: int) -> void:
+		if what != NOTIFICATION_RESIZED or content == null:
+			return
+		var available_width := maxf(0.0, size.x - horizontal_gutter * 2.0)
+		var content_width := minf(max_content_width, available_width)
+		content.position = Vector2((size.x - content_width) * 0.5, 22.0)
+		content.size = Vector2(content_width, maxf(0.0, size.y - 44.0))
 
 class StockHistoryChart extends Control:
 	var series: Array[Dictionary] = []
@@ -125,23 +142,48 @@ func _build_ui() -> void:
 	background.color = BG
 	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(background)
-	var margin := MarginContainer.new()
-	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	margin.add_theme_constant_override("margin_left", 28)
-	margin.add_theme_constant_override("margin_top", 22)
-	margin.add_theme_constant_override("margin_right", 28)
-	margin.add_theme_constant_override("margin_bottom", 22)
-	add_child(margin)
-	var page := VBoxContainer.new()
-	page.add_theme_constant_override("separation", 14)
-	margin.add_child(page)
-	page.add_child(_build_status_bar())
-	var body := HBoxContainer.new()
-	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	body.add_theme_constant_override("separation", 14)
-	page.add_child(body)
-	body.add_child(_build_market_panel())
-	body.add_child(_build_news_panel())
+	var shell := ResponsiveShell.new()
+	shell.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	shell.clip_contents = true
+	add_child(shell)
+	responsive_page = Control.new()
+	responsive_page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	shell.content = responsive_page
+	shell.add_child(responsive_page)
+	var page_layout := VBoxContainer.new()
+	page_layout.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	page_layout.add_theme_constant_override("separation", 14)
+	responsive_page.add_child(page_layout)
+	page_layout.add_child(_build_status_bar())
+	dashboard_body = HBoxContainer.new()
+	dashboard_body.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	dashboard_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dashboard_body.custom_minimum_size = Vector2.ZERO
+	dashboard_body.add_theme_constant_override("separation", 14)
+	page_layout.add_child(dashboard_body)
+	var market_panel := _build_market_panel()
+	market_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dashboard_body.add_child(market_panel)
+	var news_panel := _build_news_panel()
+	news_panel.custom_minimum_size.x = 380
+	news_panel.size_flags_horizontal = Control.SIZE_SHRINK_END
+	secondary_panel = news_panel
+	dashboard_body.add_child(news_panel)
+	_apply_responsive_layout()
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_RESIZED:
+		_apply_responsive_layout()
+
+func _apply_responsive_layout() -> void:
+	if chart == null or dashboard_body == null:
+		return
+	var viewport_size := size
+	var compact := viewport_size.x < 1500.0
+	if secondary_panel != null:
+		secondary_panel.visible = not compact
+	var viewport_height := viewport_size.y
+	chart.custom_minimum_size.y = 102.0 if compact else clampf(viewport_height * 0.28, 220.0, 330.0)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
@@ -167,6 +209,9 @@ func _build_status_bar() -> Control:
 	cash_label = _status_item(grid, "CASH", "£0.00", TEXT)
 	portfolio_label = _status_item(grid, "PORTFOLIO", "£0.00", TEXT)
 	return_label = _status_item(grid, "RETURN", "£0.00", POSITIVE)
+	var status_spacer := Control.new()
+	status_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(status_spacer)
 	network_status = _label("", 12, MUTED)
 	network_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	network_status.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -186,6 +231,7 @@ func _status_item(parent: Control, caption: String, value: String, color: Color)
 func _build_market_panel() -> Control:
 	var panel := _panel()
 	panel.custom_minimum_size.x = 690
+	panel.custom_minimum_size.y = 0
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var content := VBoxContainer.new()
 	content.add_theme_constant_override("separation", 8)
@@ -199,6 +245,8 @@ func _build_market_panel() -> Control:
 	stock_list = GridContainer.new()
 	stock_list.columns = 7
 	stock_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	stock_list.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	stock_list.custom_minimum_size.y = 0
 	stock_list.add_theme_constant_override("h_separation", 6)
 	stock_list.add_theme_constant_override("v_separation", 5)
 	_build_stock_header()
@@ -210,13 +258,22 @@ func _build_market_panel() -> Control:
 
 func _build_news_panel() -> Control:
 	var panel := _panel()
-	panel.custom_minimum_size.x = 360
+	panel.custom_minimum_size.x = 380
+	panel.custom_minimum_size.y = 0
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var content := VBoxContainer.new()
 	content.add_theme_constant_override("separation", 10)
 	panel.add_child(content)
-	content.add_child(_label("NEWS FEED", 12, MUTED))
-	content.add_child(_label("Short signals and resolved market context.", 12, MUTED))
+	secondary_tabs = TabContainer.new()
+	secondary_tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	secondary_tabs.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content.add_child(secondary_tabs)
+	var news_tab := VBoxContainer.new()
+	news_tab.name = "NEWS"
+	news_tab.add_theme_constant_override("separation", 8)
+	secondary_tabs.add_child(news_tab)
+	news_tab.add_child(_label("LIVE NEWS", 12, MUTED))
+	news_tab.add_child(_label("Trades, forecasts, actions, and resolved stories.", 11, MUTED))
 	news_filter = OptionButton.new()
 	news_filter.add_item("ALL EVENTS", 0)
 	news_filter.add_item("TRADES", 1)
@@ -224,14 +281,21 @@ func _build_news_panel() -> Control:
 	news_filter.add_item("FORECASTS", 3)
 	news_filter.add_item("RESOLVED", 4)
 	news_filter.item_selected.connect(_on_news_filter_selected)
-	content.add_child(news_filter)
-	opponent_holdings_label = _label("PLAYERS\nLoading portfolios...", 10, TEXT)
-	opponent_holdings_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	content.add_child(opponent_holdings_label)
+	news_tab.add_child(news_filter)
 	news_feed = VBoxContainer.new()
 	news_feed.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	news_feed.custom_minimum_size.y = 0
 	news_feed.add_theme_constant_override("separation", 5)
-	content.add_child(news_feed)
+	news_tab.add_child(news_feed)
+	var players_tab := VBoxContainer.new()
+	players_tab.name = "PLAYERS"
+	players_tab.add_theme_constant_override("separation", 8)
+	secondary_tabs.add_child(players_tab)
+	players_tab.add_child(_label("PLAYERS", 12, MUTED))
+	players_tab.add_child(_label("Visible positions for counter-strategy.", 11, MUTED))
+	opponent_holdings_label = _label("PLAYERS\nLoading portfolios...", 10, TEXT)
+	opponent_holdings_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	players_tab.add_child(opponent_holdings_label)
 	return panel
 
 func _panel() -> PanelContainer:
