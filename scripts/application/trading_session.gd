@@ -22,6 +22,7 @@ signal run_completed(summary: Dictionary)
 signal network_status_changed(message: String)
 signal network_readiness_changed(ready_count: int, total_count: int, local_ready: bool)
 signal network_activity(player_id: int, activity_type: String, activity_result: Dictionary)
+signal market_news_event(news_result: Dictionary)
 
 const DEFAULT_SEED: int = 42_4242
 const DAY_LENGTH_SECONDS: float = 30.0
@@ -543,6 +544,8 @@ func _process(delta: float) -> void:
 		market_sample_elapsed -= MARKET_SAMPLE_INTERVAL_SECONDS
 		var progress := 1.0 - (day_timer.seconds_remaining / DAY_LENGTH_SECONDS)
 		market_simulator.update_live_prices(game_state, progress)
+		for news_event in market_simulator.last_intraday_events:
+			market_news_event.emit(news_event)
 		market_updated.emit(state_snapshot())
 		if network_mode and network_is_host:
 			_publish_network_state()

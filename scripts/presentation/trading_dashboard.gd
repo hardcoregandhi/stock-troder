@@ -18,7 +18,7 @@ var clock_label: Label
 var cash_label: Label
 var portfolio_label: Label
 var return_label: Label
-var stock_list: GridContainer
+var stock_list: VBoxContainer
 var trade_feedback: Label
 var network_status: Label
 var chart: StockHistoryChart
@@ -51,6 +51,14 @@ class ResponsiveShell extends Control:
 
 	func _notification(what: int) -> void:
 		if what != NOTIFICATION_RESIZED or content == null:
+			return
+		_apply_content_layout()
+
+	func _ready() -> void:
+		_apply_content_layout()
+
+	func _apply_content_layout() -> void:
+		if content == null:
 			return
 		var available_width := maxf(0.0, size.x - horizontal_gutter * 2.0)
 		var content_width := minf(max_content_width, available_width)
@@ -131,6 +139,7 @@ func setup(new_session: TradingSession) -> void:
 	session.option_completed.connect(_on_trade_result)
 	session.option_rejected.connect(_on_trade_result)
 	session.network_activity.connect(_on_network_activity)
+	session.market_news_event.connect(_on_market_news_event)
 	session.computer_action_completed.connect(_on_computer_action)
 	session.run_completed.connect(_on_run_completed)
 	session.network_status_changed.connect(_on_network_status_changed)
@@ -150,6 +159,7 @@ func _build_ui() -> void:
 	responsive_page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	shell.content = responsive_page
 	shell.add_child(responsive_page)
+	shell._apply_content_layout()
 	var page_layout := VBoxContainer.new()
 	page_layout.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	page_layout.add_theme_constant_override("separation", 14)
@@ -244,8 +254,7 @@ func _build_market_panel() -> Control:
 	chart.custom_minimum_size.y = 155
 	chart.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	content.add_child(chart)
-	stock_list = GridContainer.new()
-	stock_list.columns = 7
+	stock_list = VBoxContainer.new()
 	stock_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	stock_list.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	stock_list.custom_minimum_size.y = 0
@@ -304,6 +313,8 @@ func _panel() -> PanelContainer:
 	var panel := PanelContainer.new()
 	var style := StyleBoxFlat.new()
 	style.bg_color = PANEL
+	style.border_color = Color("2b3a4c")
+	style.set_border_width_all(1)
 	style.corner_radius_top_left = 8
 	style.corner_radius_top_right = 8
 	style.corner_radius_bottom_left = 8
@@ -343,6 +354,8 @@ func _forward_button(text: String, minimum_size: Vector2) -> Button:
 	return button
 
 func _build_stock_header() -> void:
+	var header_row := HBoxContainer.new()
+	header_row.add_theme_constant_override("separation", 8)
 	for header in [
 		_column_label("STOCK", 100),
 		_column_label("LIVE", 62),
@@ -352,7 +365,8 @@ func _build_stock_header() -> void:
 		_column_label("TRADE", 96),
 		_column_label("MARKET ACTIONS", 318),
 	]:
-		stock_list.add_child(header)
+		header_row.add_child(header)
+	stock_list.add_child(header_row)
 
 func _column_label(text: String, width: float) -> Label:
 	var label := _label(text, 10, MUTED)
@@ -394,6 +408,7 @@ func _on_day_resolved(day: int, resolutions: Array[Dictionary], _snapshot: Dicti
 			"resolved": true,
 			"change": float(resolution["percentage_change"]),
 			"fake_news": bool(resolution.get("fake_news_used", false)),
+			"source": "MARKET NEWS" if bool(resolution.get("fake_news_used", false)) else "MARKET STORY",
 		})
 	if news_history.size() > 18:
 		news_history = news_history.slice(news_history.size() - 18)
@@ -439,10 +454,38 @@ func _on_network_activity(player_id: int, activity_type: String, result: Diction
 		news_history = news_history.slice(news_history.size() - 18)
 	_refresh()
 
+func _on_market_news_event(result: Dictionary) -> void:
+	news_history.append({
+		"day": session.game_state.current_day,
+		"symbol": str(result.get("symbol", "")),
+		"text": str(result.get("news", "Market update")),
+		"resolved": false,
+		"change": float(result.get("impact", 0.0)),
+		"source": "COMPANY NEWS",
+		"color": _stock_color(str(result.get("symbol", ""))),
+	})
+	if news_history.size() > 24:
+		news_history = news_history.slice(news_history.size() - 24)
+	_refresh()
+
 func _append_action_news(result: Dictionary) -> void:
 	var action := str(result.get("action", "trade"))
 	var symbol := str(result.get("symbol", ""))
 	var text := str(result.get("message", ""))
+	if action == "fake_news":
+		text = "New market story reported for %s" % symbol
+		news_history.append({
+			"day": session.game_state.current_day,
+			"symbol": symbol,
+			"text": text,
+			"resolved": false,
+			"change": 0.0,
+			"source": "MARKET NEWS",
+			"color": _stock_color(symbol),
+		})
+		if news_history.size() > 24:
+			news_history = news_history.slice(news_history.size() - 24)
+		return
 	if action == "trade":
 		var verb := "BOUGHT" if int(result.get("quantity", 0)) > 0 and text.begins_with("Bought") else "SOLD"
 		text = "%s %d %s" % [verb, absi(int(result.get("quantity", 0))), symbol]
@@ -505,25 +548,40 @@ func _update_opponent_holdings() -> void:
 
 func _build_stock_rows(state: GameState) -> void:
 	for stock in state.stocks:
+		var row := PanelContainer.new()
+		var row_style := StyleBoxFlat.new()
+		row_style.bg_color = Color("151f2b")
+		row_style.border_color = StockData.color_for_index(state.stocks.find(stock)).darkened(0.25)
+		row_style.set_border_width_all(1)
+		row_style.set_corner_radius_all(7)
+		row_style.content_margin_left = 10
+		row_style.content_margin_top = 8
+		row_style.content_margin_right = 10
+		row_style.content_margin_bottom = 8
+		row.add_theme_stylebox_override("panel", row_style)
+		var row_content := HBoxContainer.new()
+		row_content.add_theme_constant_override("separation", 8)
+		row.add_child(row_content)
+		stock_list.add_child(row)
 		var symbol := _label(stock.symbol, 12, StockData.color_for_index(state.stocks.find(stock)))
 		symbol.custom_minimum_size.x = 100
 		symbol.text = "%s  %s" % [stock.symbol, stock.company_name]
 		symbol.tooltip_text = stock.company_name
-		stock_list.add_child(symbol)
+		row_content.add_child(symbol)
 		var price := _label("", 13, TEXT)
 		price.custom_minimum_size.x = 62
-		stock_list.add_child(price)
+		row_content.add_child(price)
 		var change := _label("", 12, ACCENT)
 		change.custom_minimum_size.x = 58
-		stock_list.add_child(change)
+		row_content.add_child(change)
 		var range := _label("", 11, ACCENT)
 		range.custom_minimum_size.x = 90
 		range.autowrap_mode = TextServer.AUTOWRAP_OFF
-		stock_list.add_child(range)
+		row_content.add_child(range)
 		var position := _label("", 11, TEXT)
 		position.custom_minimum_size.x = 86
 		position.autowrap_mode = TextServer.AUTOWRAP_OFF
-		stock_list.add_child(position)
+		row_content.add_child(position)
 		var trade_actions := HBoxContainer.new()
 		trade_actions.add_theme_constant_override("separation", 3)
 		var buy := Button.new()
@@ -538,7 +596,7 @@ func _build_stock_rows(state: GameState) -> void:
 		sell.custom_minimum_size = Vector2(50, 34)
 		sell.pressed.connect(_quick_sell.bind(stock.symbol))
 		trade_actions.add_child(sell)
-		stock_list.add_child(trade_actions)
+		row_content.add_child(trade_actions)
 		var market_actions := HBoxContainer.new()
 		market_actions.add_theme_constant_override("separation", 3)
 		var pump := Button.new()
@@ -577,7 +635,7 @@ func _build_stock_rows(state: GameState) -> void:
 		put.pressed.connect(_quick_put.bind(stock.symbol))
 		market_actions.add_child(call)
 		market_actions.add_child(put)
-		stock_list.add_child(market_actions)
+		row_content.add_child(market_actions)
 		row_labels[stock.symbol] = {"price": price, "change": change, "range": range, "shares": null, "position": position, "buy": buy, "sell": sell, "pump": pump, "sabotage": sabotage, "hype": hype, "fud": fud, "call": call, "put": put}
 	_update_stock_rows(state)
 
@@ -641,32 +699,56 @@ func _update_news_feed(state: GameState) -> void:
 	if news_feed == null:
 		return
 	for child in news_feed.get_children():
-		child.queue_free()
+		child.free()
 	var entries: Array[Dictionary] = []
-	for item in news_history:
+	for item in news_history.slice(maxi(0, news_history.size() - 10)):
 		if _news_entry_matches_filter(item):
 			entries.append(item)
-	for index in state.stocks.size():
-		var stock: StockData = state.stocks[index]
-		var forecast := {
-			"day": state.current_day,
-			"symbol": stock.symbol,
-			"text": stock.current_news,
-			"resolved": false,
-			"change": stock.projection_change,
-			"color": StockData.color_for_index(index),
-		}
-		if _news_entry_matches_filter(forecast):
-			entries.append(forecast)
-	var first_entry := maxi(0, entries.size() - 8)
-	for entry in entries.slice(first_entry):
+	if entries.size() < 10:
+		for index in state.stocks.size():
+			if entries.size() >= 10:
+				break
+			var stock: StockData = state.stocks[index]
+			var forecast := {
+				"day": state.current_day,
+				"symbol": stock.symbol,
+				"text": stock.current_news,
+				"resolved": false,
+				"change": stock.projection_change,
+				"color": StockData.color_for_index(index),
+			}
+			if _news_entry_matches_filter(forecast) and not _has_feed_symbol(entries, stock.symbol):
+				entries.append(forecast)
+	for entry in entries:
 		var color: Color = entry.get("color", NEGATIVE if float(entry["change"]) < 0.0 else POSITIVE)
-		var status := "RESOLVED %+.1f%%" % (float(entry["change"]) * 100.0) if bool(entry["resolved"]) else "FORECAST"
 		var source := str(entry.get("source", "PLAYER-PLANTED FAKE" if bool(entry.get("fake_news", false)) else ("SIGNAL" if not bool(entry["resolved"]) else "MARKET STORY")))
-		var item := _label("ROUND %d  %s  %s\n%s: %s" % [int(entry["day"]), str(entry["symbol"]), status, source, str(entry["text"])], 11, color)
-		item.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		item.custom_minimum_size.x = 300
-		news_feed.add_child(item)
+		var status := "RESOLVED %+.1f%%" % (float(entry["change"]) * 100.0) if bool(entry["resolved"]) else ("ACTIVITY" if source == "AI ACTION" or source.begins_with("NETWORK") else ("NEWS" if source == "COMPANY NEWS" or source == "MARKET NEWS" else "FORECAST"))
+		news_feed.add_child(_build_feed_card(entry, status, source, color))
+
+func _has_feed_symbol(entries: Array[Dictionary], symbol: String) -> bool:
+	for entry in entries:
+		if str(entry.get("symbol", "")) == symbol:
+			return true
+	return false
+
+func _build_feed_card(entry: Dictionary, status: String, source: String, color: Color) -> Control:
+	var card := PanelContainer.new()
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color("111a25")
+	style.border_color = Color("263548")
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(6)
+	style.content_margin_left = 10
+	style.content_margin_top = 8
+	style.content_margin_right = 10
+	style.content_margin_bottom = 8
+	card.add_theme_stylebox_override("panel", style)
+	var text := _label("ROUND %d  %s  %s\n%s  %s" % [int(entry["day"]), str(entry["symbol"]), status, source, str(entry["text"])], 11, color)
+	text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	card.custom_minimum_size.y = 64
+	card.add_child(text)
+	return card
 
 func _news_entry_matches_filter(entry: Dictionary) -> bool:
 	if news_filter == null or news_filter.selected == 0:

@@ -15,6 +15,8 @@ const MAX_LIVE_NOISE: float = 0.04
 
 var random: RandomNumberGenerator = RandomNumberGenerator.new()
 var seed: int
+var intraday_news_cooldowns: Dictionary = {}
+var last_intraday_events: Array[Dictionary] = []
 
 func _init(run_seed: int = 0) -> void:
 	seed = run_seed
@@ -23,6 +25,7 @@ func _init(run_seed: int = 0) -> void:
 func prepare_day(state: GameState) -> Array[Dictionary]:
 	if state.phase == GameState.Phase.COMPLETE:
 		return []
+	intraday_news_cooldowns.clear()
 	state.phase = GameState.Phase.PREPARING
 	var projections: Array[Dictionary] = []
 	for stock in state.stocks:
@@ -48,8 +51,12 @@ func update_live_prices(state: GameState, progress: float) -> Array[Dictionary]:
 	if state.phase != GameState.Phase.TRADING:
 		return []
 	var updates: Array[Dictionary] = []
+	last_intraday_events.clear()
 	var clamped_progress := clampf(progress, 0.0, 1.0)
 	for stock in state.stocks:
+		var intraday_event := _maybe_intraday_event(stock)
+		if not intraday_event.is_empty():
+			last_intraday_events.append(intraday_event)
 		var target_price := maxi(PRICE_FLOOR_PENCE, stock.projected_price_pence)
 		if stock.pump_active:
 			target_price = maxi(PRICE_FLOOR_PENCE, roundi(float(target_price) * (1.0 + stock.pump_live_boost)))
@@ -68,6 +75,20 @@ func update_live_prices(state: GameState, progress: float) -> Array[Dictionary]:
 			"progress": clamped_progress,
 		})
 	return updates
+
+func _maybe_intraday_event(stock: StockData) -> Dictionary:
+	var cooldown_until := int(intraday_news_cooldowns.get(stock.symbol, 0))
+	if cooldown_until > Time.get_ticks_msec() or random.randf() > 0.012 or stock.news_events.is_empty():
+		return {}
+	var event: Dictionary = stock.news_events[random.randi_range(0, stock.news_events.size() - 1)].duplicate()
+	var impact := float(event.get("impact", 0.0)) * 0.55
+	stock.projection_change += impact
+	stock.projection_low += impact
+	stock.projection_high += impact
+	stock.projected_price_pence = maxi(PRICE_FLOOR_PENCE, roundi(float(stock.current_price_pence) * (1.0 + stock.projection_change)))
+	stock.current_news = str(event.get("text", "Market update"))
+	intraday_news_cooldowns[stock.symbol] = Time.get_ticks_msec() + 5_000
+	return {"symbol": stock.symbol, "news": stock.current_news, "impact": impact, "source": "COMPANY NEWS"}
 
 func resolve_day(state: GameState) -> Array[Dictionary]:
 	if state.phase != GameState.Phase.TRADING:

@@ -192,7 +192,7 @@ func test_fake_news_direction_changes_projection_and_reports_seeded_outcome() ->
 	assert_true(TRADE_SERVICE.new().plant_fake_news(first_state, "AUR", 1)["success"])
 	assert_true(TRADE_SERVICE.new().plant_fake_news(second_state, "AUR", 1)["success"])
 	assert_gt(first_stock.projection_change, before_projection)
-	assert_true(first_stock.current_news.begins_with("PLAYER-PLANTED FAKE:"))
+	assert_eq(first_stock.current_news, "Quiet trading day")
 	var first_resolution := first_simulator.resolve_day(first_state)[0]
 	var second_resolution := second_simulator.resolve_day(second_state)[0]
 	assert_eq(first_resolution, second_resolution)

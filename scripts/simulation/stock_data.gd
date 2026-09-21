@@ -130,7 +130,8 @@ func activate_fake_news(direction: int, projection_weight: float, base_news: Str
 	fake_news_direction = clampi(direction, -1, 1)
 	fake_news_projection_weight = projection_weight
 	fake_news_active = true
-	current_news = "PLAYER-PLANTED FAKE: %s" % base_news
+	if current_news.is_empty():
+		current_news = base_news if not base_news.is_empty() else (str(news_events[0].get("text", "Market update")) if not news_events.is_empty() else "Market update")
 
 func clear_pump() -> void:
 	pump_active = false
