@@ -2,7 +2,7 @@ class_name NetworkLobby
 extends Node
 
 const DEFAULT_PORT := 7000
-const MAX_PLAYERS := 6
+const MAX_PLAYERS := 4
 
 signal status_changed(status: String)
 signal players_changed(players: Array[Dictionary])
@@ -99,6 +99,15 @@ func submit_buy(symbol: String, quantity: int) -> void:
 
 func submit_sell(symbol: String, quantity: int) -> void:
 	_submit_intent.rpc_id(1, "sell", symbol, quantity)
+
+func submit_pump(symbol: String) -> void:
+	_submit_intent.rpc_id(1, "pump", symbol, 0)
+
+func submit_sabotage(symbol: String) -> void:
+	_submit_intent.rpc_id(1, "sabotage", symbol, 0)
+
+func submit_fake_news(symbol: String, direction: int) -> void:
+	_submit_intent.rpc_id(1, "fake_news_positive" if direction > 0 else "fake_news_negative", symbol, direction)
 
 func submit_ready_for_next_day() -> void:
 	_submit_intent.rpc_id(1, "ready_for_next_day", "", 0)

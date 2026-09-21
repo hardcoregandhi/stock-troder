@@ -486,18 +486,18 @@ func _update_stock_rows(state: GameState) -> void:
 		var pump_active := state.has_pumped(stock.symbol) and stock.pump_active
 		labels["pump"].text = "PUMP ON" if pump_active else "PUMP"
 		labels["pump"].tooltip_text = "ACTIVE: +4.0% live path; correction risk remains." if pump_active else "Spend £25.00 to lift this stock's live path."
-		labels["pump"].disabled = session.network_mode or not can_trade or pump_active or state.cash_pence < GameState.PUMP_COST_PENCE
+		labels["pump"].disabled = session.network_mode or not can_trade or pump_active or state.action_on_cooldown("pump", stock.symbol) or state.cash_pence < GameState.PUMP_COST_PENCE
 		var sabotage_active := state.has_sabotaged(stock.symbol) and stock.sabotage_active
 		labels["sabotage"].text = "SAB ON" if sabotage_active else "SABOTAGE"
 		labels["sabotage"].tooltip_text = "ACTIVE: negative live pressure; resolution risk remains." if sabotage_active else "Spend £50.00 to add negative live pressure."
-		labels["sabotage"].disabled = session.network_mode or not can_trade or sabotage_active or state.cash_pence < GameState.SABOTAGE_COST_PENCE
+		labels["sabotage"].disabled = session.network_mode or not can_trade or sabotage_active or state.action_on_cooldown("sabotage", stock.symbol) or state.cash_pence < GameState.SABOTAGE_COST_PENCE
 		var fake_news_active := state.has_planted_fake_news(stock.symbol) and stock.fake_news_active
 		labels["hype"].text = "HYPE ON" if fake_news_active and stock.fake_news_direction > 0 else "HYPE"
 		labels["hype"].tooltip_text = "ACTIVE: uncertain positive planted news." if fake_news_active and stock.fake_news_direction > 0 else "Plant uncertain positive news for £75.00."
-		labels["hype"].disabled = session.network_mode or not can_trade or fake_news_active or state.cash_pence < GameState.FAKE_NEWS_COST_PENCE
+		labels["hype"].disabled = session.network_mode or not can_trade or fake_news_active or state.action_on_cooldown("fake_news", stock.symbol) or state.cash_pence < GameState.FAKE_NEWS_COST_PENCE
 		labels["fud"].text = "FUD ON" if fake_news_active and stock.fake_news_direction < 0 else "FUD"
 		labels["fud"].tooltip_text = "ACTIVE: uncertain negative planted news." if fake_news_active and stock.fake_news_direction < 0 else "Plant uncertain negative news for £75.00."
-		labels["fud"].disabled = session.network_mode or not can_trade or fake_news_active or state.cash_pence < GameState.FAKE_NEWS_COST_PENCE
+		labels["fud"].disabled = session.network_mode or not can_trade or fake_news_active or state.action_on_cooldown("fake_news", stock.symbol) or state.cash_pence < GameState.FAKE_NEWS_COST_PENCE
 
 func _update_market_surface(state: GameState) -> void:
 	var chart_series: Array[Dictionary] = []
@@ -664,6 +664,7 @@ func _show_debrief(day: int, resolutions: Array[Dictionary]) -> void:
 	page.add_child(debrief_panel)
 	var content := VBoxContainer.new()
 	content.add_theme_constant_override("separation", 8)
+	content.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	debrief_panel.add_child(content)
 	var title := _label("DAY %d DEBRIEF" % day, 22, TEXT)
 	title.custom_minimum_size.y = 28
@@ -675,6 +676,7 @@ func _show_debrief(day: int, resolutions: Array[Dictionary]) -> void:
 	upper.add_theme_constant_override("separation", 10)
 	upper.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	upper.size_flags_stretch_ratio = 2.0
+	upper.custom_minimum_size.y = 180
 	var chart_panel := _build_debrief_chart()
 	chart_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	chart_panel.size_flags_stretch_ratio = 1.0
@@ -685,21 +687,23 @@ func _show_debrief(day: int, resolutions: Array[Dictionary]) -> void:
 	upper.add_child(details_panel)
 	content.add_child(upper)
 	var lower := _build_debrief_news_panel(resolutions)
-	lower.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	lower.size_flags_stretch_ratio = 1.0
+	lower.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	lower.custom_minimum_size.y = 112
 	content.add_child(lower)
-	var action_bar := HBoxContainer.new()
-	action_bar.custom_minimum_size.y = 42
-	action_bar.size_flags_vertical = Control.SIZE_SHRINK_END
-	action_bar.alignment = BoxContainer.ALIGNMENT_END
-	content.add_child(action_bar)
-	var action_spacer := Control.new()
-	action_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	action_bar.add_child(action_spacer)
+	var action_layer := Control.new()
+	action_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	action_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	debrief_layer.add_child(action_layer)
 	if session.game_state.phase == GameState.Phase.DEBRIEF:
 		var next_day := _forward_button("NEXT DAY", Vector2(150, 38))
 		next_day.pressed.connect(_continue_after_debrief)
-		action_bar.add_child(next_day)
+		next_day.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+		next_day.offset_left = -178
+		next_day.offset_top = -58
+		next_day.offset_right = -28
+		next_day.offset_bottom = -20
+		next_day.mouse_filter = Control.MOUSE_FILTER_STOP
+		action_layer.add_child(next_day)
 
 func _build_debrief_news_panel(resolutions: Array[Dictionary]) -> Control:
 	var panel := _panel()

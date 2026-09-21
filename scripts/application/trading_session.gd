@@ -118,11 +118,12 @@ func receive_network_intent(peer_id: int, action: String, symbol: String, quanti
 		return _execute_network_trade(peer_id, trade_service.buy(network_player_states[peer_id], symbol, quantity))
 	elif action == "sell":
 		return _execute_network_trade(peer_id, trade_service.sell(network_player_states[peer_id], symbol, quantity))
-	elif action == "sabotage" or action == "fake_news_positive" or action == "fake_news_negative":
-		var result := _network_action_rejection(symbol, action)
-		if network_lobby != null:
-			network_lobby.send_match_event({"type": "status", "message": result["message"]}, peer_id)
-		return result
+	elif action == "pump":
+		return _execute_network_manipulation(peer_id, trade_service.pump(network_player_states[peer_id], symbol))
+	elif action == "sabotage":
+		return _execute_network_manipulation(peer_id, trade_service.sabotage(network_player_states[peer_id], symbol))
+	elif action == "fake_news_positive" or action == "fake_news_negative":
+		return _execute_network_manipulation(peer_id, trade_service.plant_fake_news(network_player_states[peer_id], symbol, quantity))
 	elif action == "ready_for_next_day":
 		_mark_network_player_ready(peer_id)
 	elif action == "ready_for_trading":
@@ -153,8 +154,11 @@ func sell(symbol: String, quantity: int) -> Dictionary:
 	return _execute_trade(trade_service.sell(game_state, symbol, quantity))
 
 func pump(symbol: String) -> Dictionary:
+	if network_mode and not network_is_host:
+		network_lobby.submit_pump(symbol)
+		return {"success": true, "pending": true, "message": "Pump sent to host.", "symbol": symbol}
 	if network_mode:
-		return {"success": false, "message": "Pump is not available in multiplayer.", "symbol": symbol}
+		return _execute_network_manipulation(network_local_player_id, trade_service.pump(game_state, symbol))
 	var result := trade_service.pump(game_state, symbol)
 	if result["success"]:
 		pump_completed.emit(result)
@@ -163,8 +167,11 @@ func pump(symbol: String) -> Dictionary:
 	return result
 
 func sabotage(symbol: String) -> Dictionary:
+	if network_mode and not network_is_host:
+		network_lobby.submit_sabotage(symbol)
+		return {"success": true, "pending": true, "message": "Sabotage sent to host.", "symbol": symbol}
 	if network_mode:
-		return _network_action_rejection(symbol, "sabotage")
+		return _execute_network_manipulation(network_local_player_id, trade_service.sabotage(game_state, symbol))
 	var result := trade_service.sabotage(game_state, symbol)
 	if result["success"]:
 		sabotage_completed.emit(result)
@@ -174,8 +181,11 @@ func sabotage(symbol: String) -> Dictionary:
 	return result
 
 func plant_fake_news(symbol: String, direction: int) -> Dictionary:
+	if network_mode and not network_is_host:
+		network_lobby.submit_fake_news(symbol, direction)
+		return {"success": true, "pending": true, "message": "HYPE/FUD sent to host.", "symbol": symbol, "direction": direction}
 	if network_mode:
-		return _network_action_rejection(symbol, "fake_news")
+		return _execute_network_manipulation(network_local_player_id, trade_service.plant_fake_news(game_state, symbol, direction))
 	var result := trade_service.plant_fake_news(game_state, symbol, direction)
 	if result["success"]:
 		fake_news_completed.emit(result)
@@ -320,6 +330,8 @@ func apply_network_event(event: Dictionary) -> void:
 	match str(event.get("type", "")):
 		"trade":
 			_execute_trade(event["result"])
+		"action":
+			_emit_manipulation_result(event["result"])
 		"day_resolved":
 			day_resolved.emit(int(event["day"]), event["resolutions"], state_snapshot())
 		"brief_started":
@@ -383,6 +395,33 @@ func _execute_network_trade(player_id: int, result: Dictionary) -> Dictionary:
 		network_lobby.send_match_event({"type": "trade", "result": result}, player_id)
 	_publish_network_state()
 	return result
+
+func _execute_network_manipulation(player_id: int, result: Dictionary) -> Dictionary:
+	if player_id == network_local_player_id:
+		_emit_manipulation_result(result)
+	elif network_lobby != null:
+		network_lobby.send_match_event({"type": "action", "result": result, "player_id": player_id}, player_id)
+	_publish_network_state()
+	return result
+
+func _emit_manipulation_result(result: Dictionary) -> void:
+	var action := str(result.get("action", ""))
+	if action == "pump":
+		if bool(result.get("success", false)):
+			pump_completed.emit(result)
+		else:
+			pump_rejected.emit(result)
+	elif action == "sabotage":
+		if bool(result.get("success", false)):
+			sabotage_completed.emit(result)
+		else:
+			sabotage_rejected.emit(result)
+	else:
+		if bool(result.get("success", false)):
+			fake_news_completed.emit(result)
+		else:
+			fake_news_rejected.emit(result)
+	market_updated.emit(state_snapshot())
 
 func _mark_network_player_ready(player_id: int) -> void:
 	network_ready_players[player_id] = true

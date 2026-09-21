@@ -18,6 +18,7 @@ const MAX_STOCK_COUNT: int = 6
 const PUMP_COST_PENCE: int = 2_500
 const SABOTAGE_COST_PENCE: int = 5_000
 const FAKE_NEWS_COST_PENCE: int = 7_500
+const MANIPULATION_COOLDOWN_DAYS: int = 1
 
 var starting_cash_pence: int = STARTING_CASH_PENCE
 var cash_pence: int = STARTING_CASH_PENCE
@@ -29,6 +30,7 @@ var holdings: Dictionary = {}
 var pumped_symbols: Dictionary = {}
 var sabotaged_symbols: Dictionary = {}
 var fake_news_symbols: Dictionary = {}
+var manipulation_cooldowns: Dictionary = {}
 var seed: int
 var stock_count: int = DEFAULT_STOCK_COUNT
 
@@ -72,6 +74,12 @@ func mark_pumped(symbol: String) -> void:
 
 func has_pumped(symbol: String) -> bool:
 	return bool(pumped_symbols.get(symbol, false))
+
+func action_on_cooldown(action: String, symbol: String) -> bool:
+	return current_day < int(manipulation_cooldowns.get("%s:%s" % [action, symbol], 0))
+
+func set_action_cooldown(action: String, symbol: String) -> void:
+	manipulation_cooldowns["%s:%s" % [action, symbol]] = current_day + MANIPULATION_COOLDOWN_DAYS + 1
 
 func mark_sabotaged(symbol: String) -> void:
 	sabotaged_symbols[symbol] = true

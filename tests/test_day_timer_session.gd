@@ -128,7 +128,9 @@ func test_next_day_resets_pump_usage() -> void:
 	assert_true(session.continue_to_next_day())
 	assert_false(session.game_state.has_pumped("AUR"))
 	assert_true(session.start_trading_round())
-	assert_true(session.pump("AUR")["success"])
+	var cooldown_result := session.pump("AUR")
+	assert_false(cooldown_result["success"])
+	assert_true(cooldown_result["message"].contains("cooling down"))
 
 func test_next_day_resets_all_manipulation_usage() -> void:
 	var session: TradingSession = _new_session()

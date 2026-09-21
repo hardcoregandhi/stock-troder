@@ -57,20 +57,25 @@ func test_unknown_peer_intent_cannot_change_host_state() -> void:
 	session.receive_network_intent(99, "buy", "AUR", 1)
 	assert_eq(session.game_state.holdings["AUR"], 0)
 
-func test_network_rejects_sabotage_and_fake_news_actions() -> void:
+func test_network_host_validates_sabotage_and_fake_news_actions() -> void:
 	var session: TradingSession = TRADING_SESSION.new()
 	track(session)
 	session._ready()
 	session.network_mode = true
-	session.network_is_host = false
+	session.network_is_host = true
 	session.game_state = GAME_STATE.new(42, 2)
+	session.game_state.phase = GAME_STATE.Phase.TRADING
 	session.trade_service = TradeService.new()
-	var sabotage_result := session.sabotage("AUR")
-	var fake_result := session.plant_fake_news("AUR", 1)
-	assert_false(sabotage_result["success"])
-	assert_false(fake_result["success"])
-	assert_true(str(sabotage_result["message"]).contains("single-player"))
-	assert_true(str(fake_result["message"]).contains("single-player"))
+	var remote_state: GameState = GAME_STATE.new(42, 2)
+	remote_state.stocks = session.game_state.stocks
+	remote_state.phase = GAME_STATE.Phase.TRADING
+	session.network_player_states = {1: session.game_state, 2: remote_state}
+	var sabotage_result := session.receive_network_intent(2, "sabotage", "AUR", 0)
+	var fake_result := session.receive_network_intent(2, "fake_news_positive", "BRK", 1)
+	assert_true(sabotage_result["success"])
+	assert_true(fake_result["success"])
+	assert_true(remote_state.has_sabotaged("AUR"))
+	assert_true(remote_state.has_planted_fake_news("BRK"))
 
 func test_host_ranking_uses_authoritative_portfolio_values() -> void:
 	var session: TradingSession = TRADING_SESSION.new()

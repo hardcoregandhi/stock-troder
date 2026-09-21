@@ -34,12 +34,15 @@ func pump(state: GameState, symbol: String) -> Dictionary:
 		return _pump_result(state, false, "Pump is only available during trading.", symbol, 0, false, 0.0, false)
 	if stock == null:
 		return _pump_result(state, false, "Unknown stock.", symbol, 0, false, 0.0, false)
+	if state.action_on_cooldown("pump", symbol):
+		return _pump_result(state, false, "Pump is cooling down for this stock.", symbol, 0, false, 0.0, false)
 	if state.has_pumped(symbol):
 		return _pump_result(state, false, "Pump already used for this stock this round.", symbol, 0, false, 0.0, false)
 	if state.cash_pence < GameState.PUMP_COST_PENCE:
 		return _pump_result(state, false, "Not enough cash for Pump.", symbol, 0, false, 0.0, false)
 	state.cash_pence -= GameState.PUMP_COST_PENCE
 	state.mark_pumped(symbol)
+	state.set_action_cooldown("pump", symbol)
 	stock.activate_pump(0.04)
 	return _pump_result(state, true, "Pump active on %s: +4.0%% live path. £25.00 spent; correction risk at resolution." % symbol, symbol, GameState.PUMP_COST_PENCE, true, stock.pump_live_boost, true)
 
@@ -49,12 +52,15 @@ func sabotage(state: GameState, symbol: String) -> Dictionary:
 		return _manipulation_result(state, false, "Sabotage is only available during trading.", symbol, "sabotage")
 	if stock == null:
 		return _manipulation_result(state, false, "Unknown stock.", symbol, "sabotage")
+	if state.action_on_cooldown("sabotage", symbol):
+		return _manipulation_result(state, false, "Sabotage is cooling down for this stock.", symbol, "sabotage")
 	if state.has_sabotaged(symbol):
 		return _manipulation_result(state, false, "Sabotage already used for this stock this round.", symbol, "sabotage")
 	if state.cash_pence < GameState.SABOTAGE_COST_PENCE:
 		return _manipulation_result(state, false, "Not enough cash for Sabotage.", symbol, "sabotage")
 	state.cash_pence -= GameState.SABOTAGE_COST_PENCE
 	state.mark_sabotaged(symbol)
+	state.set_action_cooldown("sabotage", symbol)
 	stock.activate_sabotage(-0.04)
 	return _manipulation_result(state, true, "Sabotage active on %s: negative live pressure and resolution risk. £50.00 spent." % symbol, symbol, "sabotage", GameState.SABOTAGE_COST_PENCE, stock.sabotage_live_pressure)
 
@@ -65,6 +71,8 @@ func plant_fake_news(state: GameState, symbol: String, direction: int) -> Dictio
 		return _manipulation_result(state, false, "Fake News is only available during trading.", symbol, "fake_news", normalized_direction)
 	if stock == null:
 		return _manipulation_result(state, false, "Unknown stock.", symbol, "fake_news", normalized_direction)
+	if state.action_on_cooldown("fake_news", symbol):
+		return _manipulation_result(state, false, "HYPE/FUD is cooling down for this stock.", symbol, "fake_news", normalized_direction)
 	if normalized_direction == 0:
 		return _manipulation_result(state, false, "Fake News needs a positive or negative direction.", symbol, "fake_news", normalized_direction)
 	if state.has_planted_fake_news(symbol):
@@ -73,6 +81,7 @@ func plant_fake_news(state: GameState, symbol: String, direction: int) -> Dictio
 		return _manipulation_result(state, false, "Not enough cash for Fake News.", symbol, "fake_news", normalized_direction)
 	state.cash_pence -= GameState.FAKE_NEWS_COST_PENCE
 	state.mark_fake_news_planted(symbol)
+	state.set_action_cooldown("fake_news", symbol)
 	var projection_weight := 0.03 * float(normalized_direction)
 	stock.projection_change += projection_weight
 	stock.projection_low += projection_weight
