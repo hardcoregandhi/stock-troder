@@ -125,6 +125,16 @@ func test_fake_news_costs_seventy_five_pounds_preserves_direction_and_is_once_pe
 	assert_true(state.get_stock("AUR").current_news.begins_with("PLAYER-PLANTED FAKE:"))
 	assert_false(service.plant_fake_news(state, "AUR", 1)["success"])
 
+func test_fake_news_rejects_brief_without_charging_cash() -> void:
+	var state: GameState = GAME_STATE.new(123, 3)
+	var service: TradeService = TRADE_SERVICE.new()
+	var starting_cash := state.cash_pence
+	var result := service.plant_fake_news(state, "AUR", 1)
+	assert_false(result["success"])
+	assert_true(result["message"].contains("trading"))
+	assert_eq(state.cash_pence, starting_cash)
+	assert_false(state.has_planted_fake_news("AUR"))
+
 func test_manipulation_usage_resets_between_rounds() -> void:
 	var state: GameState = GAME_STATE.new(123, 3)
 	state.phase = GameState.Phase.TRADING

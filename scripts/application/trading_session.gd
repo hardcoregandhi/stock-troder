@@ -176,7 +176,6 @@ func continue_to_next_day() -> bool:
 			return false
 		for player_id in network_ready_players:
 			network_ready_players[player_id] = false
-		network_ready_players[network_local_player_id] = true
 	if game_state == null or game_state.phase != GameState.Phase.DEBRIEF:
 		return false
 	game_state.current_day += 1

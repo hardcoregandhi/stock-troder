@@ -112,3 +112,29 @@ func test_start_trading_waits_for_every_player_and_resets_readiness_after_start(
 	session._mark_network_player_ready_for_trading(2)
 	assert_eq(session._network_ready_count(), 0)
 	assert_eq(session.game_state.phase, GAME_STATE.Phase.TRADING)
+
+func test_next_day_clears_readiness_for_new_brief_and_trading_round() -> void:
+	var session: TradingSession = TRADING_SESSION.new()
+	track(session)
+	session._ready()
+	session.network_mode = true
+	session.network_is_host = true
+	session.network_local_player_id = 1
+	session.game_state = GAME_STATE.new(42, 3)
+	session.game_state.phase = GAME_STATE.Phase.DEBRIEF
+	session.market_simulator = MarketSimulator.new(42)
+	session.trade_service = TradeService.new()
+	var remote_state: GameState = GAME_STATE.new(42, 3)
+	remote_state.phase = GAME_STATE.Phase.DEBRIEF
+	remote_state.stocks = session.game_state.stocks
+	session.network_player_states = {1: session.game_state, 2: remote_state}
+	session.network_ready_players = {1: false, 2: true}
+
+	assert_true(session.continue_to_next_day())
+	assert_eq(session.game_state.current_day, 2)
+	assert_eq(session.game_state.phase, GAME_STATE.Phase.BRIEF)
+	assert_eq(session._network_ready_count(), 0)
+	assert_false(session.start_trading_round())
+	assert_eq(session._network_ready_count(), 1)
+	session._mark_network_player_ready_for_trading(2)
+	assert_eq(session.game_state.phase, GAME_STATE.Phase.TRADING)

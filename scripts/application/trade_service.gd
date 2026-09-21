@@ -104,6 +104,7 @@ func _trade_result(
 	return {
 		"success": success,
 		"message": message,
+		"action": "pump",
 		"symbol": symbol,
 		"quantity": quantity,
 		"execution_price_pence": price,

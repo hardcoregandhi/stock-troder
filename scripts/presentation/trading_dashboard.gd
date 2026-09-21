@@ -34,6 +34,7 @@ var debrief_day_series: Array[Dictionary] = []
 var debrief_game_series: Array[Dictionary] = []
 var row_labels: Dictionary = {}
 var news_feed: VBoxContainer
+var news_filter: OptionButton
 var news_history: Array[Dictionary] = []
 var pause_layer: Control
 var start_trading_button: Button
@@ -211,6 +212,14 @@ func _build_news_panel() -> Control:
 	panel.add_child(content)
 	content.add_child(_label("NEWS FEED", 12, MUTED))
 	content.add_child(_label("Short signals and resolved market context.", 12, MUTED))
+	news_filter = OptionButton.new()
+	news_filter.add_item("ALL EVENTS", 0)
+	news_filter.add_item("TRADES", 1)
+	news_filter.add_item("ACTIONS", 2)
+	news_filter.add_item("FORECASTS", 3)
+	news_filter.add_item("RESOLVED", 4)
+	news_filter.item_selected.connect(_on_news_filter_selected)
+	content.add_child(news_filter)
 	news_feed = VBoxContainer.new()
 	news_feed.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	news_feed.add_theme_constant_override("separation", 5)
@@ -272,6 +281,8 @@ func _build_stock_header() -> void:
 		_column_label("SELL", 44),
 		_column_label("PUMP", 52),
 		_column_label("SABOTAGE", 70),
+		_column_label("HYPE", 52),
+		_column_label("FUD", 44),
 	]:
 		stock_list.add_child(header)
 
@@ -325,7 +336,38 @@ func _on_day_resolved(day: int, resolutions: Array[Dictionary], _snapshot: Dicti
 func _on_trade_result(result: Dictionary) -> void:
 	trade_feedback.text = result["message"]
 	trade_feedback.add_theme_color_override("font_color", POSITIVE if result["success"] else NEGATIVE)
+	if bool(result.get("success", false)):
+		_append_action_news(result)
 	_refresh()
+
+func _append_action_news(result: Dictionary) -> void:
+	var action := str(result.get("action", "trade"))
+	var symbol := str(result.get("symbol", ""))
+	var text := str(result.get("message", ""))
+	if action == "trade":
+		var verb := "BOUGHT" if int(result.get("quantity", 0)) > 0 and text.begins_with("Bought") else "SOLD"
+		text = "%s %d %s" % [verb, absi(int(result.get("quantity", 0))), symbol]
+	news_history.append({
+			"day": session.game_state.current_day,
+			"symbol": symbol,
+			"text": text,
+			"resolved": false,
+			"change": 0.0,
+			"source": "PLAYER TRADE",
+			"color": _stock_color(symbol),
+		})
+	else:
+		news_history.append({
+			"day": session.game_state.current_day,
+			"symbol": symbol,
+			"text": text,
+			"resolved": false,
+			"change": 0.0,
+			"source": action.to_upper(),
+			"color": _stock_color(symbol),
+		})
+	if news_history.size() > 18:
+		news_history = news_history.slice(news_history.size() - 18)
 
 func _on_network_status_changed(message: String) -> void:
 	if network_status != null:
@@ -333,6 +375,10 @@ func _on_network_status_changed(message: String) -> void:
 
 func _on_network_readiness_changed(_ready_count: int, _total_count: int, _local_ready: bool) -> void:
 	_update_start_trading_button()
+
+func _on_news_filter_selected(_index: int) -> void:
+	if session != null and session.game_state != null:
+		_update_news_feed(session.game_state)
 
 func _refresh() -> void:
 	if session == null or session.game_state == null:
@@ -401,7 +447,19 @@ func _build_stock_rows(state: GameState) -> void:
 		sabotage.custom_minimum_size.x = 70
 		sabotage.pressed.connect(_quick_sabotage.bind(stock.symbol))
 		stock_list.add_child(sabotage)
-		row_labels[stock.symbol] = {"price": price, "change": change, "range": range, "shares": shares, "position": position, "buy": buy, "sell": sell, "pump": pump, "sabotage": sabotage}
+		var hype := Button.new()
+		hype.text = "HYPE"
+		hype.tooltip_text = "Plant uncertain positive news for £75.00."
+		hype.custom_minimum_size.x = 52
+		hype.pressed.connect(_quick_fake_news.bind(stock.symbol, 1))
+		stock_list.add_child(hype)
+		var fud := Button.new()
+		fud.text = "FUD"
+		fud.tooltip_text = "Plant uncertain negative news for £75.00."
+		fud.custom_minimum_size.x = 44
+		fud.pressed.connect(_quick_fake_news.bind(stock.symbol, -1))
+		stock_list.add_child(fud)
+		row_labels[stock.symbol] = {"price": price, "change": change, "range": range, "shares": shares, "position": position, "buy": buy, "sell": sell, "pump": pump, "sabotage": sabotage, "hype": hype, "fud": fud}
 	_update_stock_rows(state)
 
 func _update_stock_rows(state: GameState) -> void:
@@ -426,6 +484,13 @@ func _update_stock_rows(state: GameState) -> void:
 		labels["sabotage"].text = "SAB ON" if sabotage_active else "SABOTAGE"
 		labels["sabotage"].tooltip_text = "ACTIVE: negative live pressure; resolution risk remains." if sabotage_active else "Spend £50.00 to add negative live pressure."
 		labels["sabotage"].disabled = session.network_mode or not can_trade or sabotage_active or state.cash_pence < GameState.SABOTAGE_COST_PENCE
+		var fake_news_active := state.has_planted_fake_news(stock.symbol) and stock.fake_news_active
+		labels["hype"].text = "HYPE ON" if fake_news_active and stock.fake_news_direction > 0 else "HYPE"
+		labels["hype"].tooltip_text = "ACTIVE: uncertain positive planted news." if fake_news_active and stock.fake_news_direction > 0 else "Plant uncertain positive news for £75.00."
+		labels["hype"].disabled = session.network_mode or not can_trade or fake_news_active or state.cash_pence < GameState.FAKE_NEWS_COST_PENCE
+		labels["fud"].text = "FUD ON" if fake_news_active and stock.fake_news_direction < 0 else "FUD"
+		labels["fud"].tooltip_text = "ACTIVE: uncertain negative planted news." if fake_news_active and stock.fake_news_direction < 0 else "Plant uncertain negative news for £75.00."
+		labels["fud"].disabled = session.network_mode or not can_trade or fake_news_active or state.cash_pence < GameState.FAKE_NEWS_COST_PENCE
 
 func _update_market_surface(state: GameState) -> void:
 	var chart_series: Array[Dictionary] = []
@@ -459,26 +524,45 @@ func _update_news_feed(state: GameState) -> void:
 		child.queue_free()
 	var entries: Array[Dictionary] = []
 	for item in news_history:
-		entries.append(item)
+		if _news_entry_matches_filter(item):
+			entries.append(item)
 	for index in state.stocks.size():
 		var stock: StockData = state.stocks[index]
-		entries.append({
+		var forecast := {
 			"day": state.current_day,
 			"symbol": stock.symbol,
 			"text": stock.current_news,
 			"resolved": false,
 			"change": stock.projection_change,
 			"color": StockData.color_for_index(index),
-		})
+		}
+		if _news_entry_matches_filter(forecast):
+			entries.append(forecast)
 	var first_entry := maxi(0, entries.size() - 8)
 	for entry in entries.slice(first_entry):
 		var color: Color = entry.get("color", NEGATIVE if float(entry["change"]) < 0.0 else POSITIVE)
 		var status := "RESOLVED %+.1f%%" % (float(entry["change"]) * 100.0) if bool(entry["resolved"]) else "FORECAST"
-		var source := "PLAYER-PLANTED FAKE" if bool(entry.get("fake_news", false)) else ("SIGNAL" if not bool(entry["resolved"]) else "MARKET STORY")
+		var source := str(entry.get("source", "PLAYER-PLANTED FAKE" if bool(entry.get("fake_news", false)) else ("SIGNAL" if not bool(entry["resolved"]) else "MARKET STORY")))
 		var item := _label("ROUND %d  %s  %s\n%s: %s" % [int(entry["day"]), str(entry["symbol"]), status, source, str(entry["text"])], 11, color)
 		item.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		item.custom_minimum_size.x = 300
 		news_feed.add_child(item)
+
+func _news_entry_matches_filter(entry: Dictionary) -> bool:
+	if news_filter == null or news_filter.selected == 0:
+		return true
+	var resolved := bool(entry.get("resolved", false))
+	var source := str(entry.get("source", ""))
+	match news_filter.selected:
+		1:
+			return source == "PLAYER TRADE"
+		2:
+			return source in ["PUMP", "SABOTAGE", "FAKE_NEWS"]
+		3:
+			return not resolved and source not in ["PLAYER TRADE", "PUMP", "SABOTAGE", "FAKE_NEWS"]
+		4:
+			return resolved
+	return true
 
 func _quick_buy(symbol: String) -> void:
 	session.buy(symbol, 1)
@@ -912,8 +996,8 @@ func _next_day_outlook() -> Control:
 		_column_label("STOCK", 70),
 		_column_label("STORY", 0),
 		_column_label("FORECAST", 150),
-		_column_label("FAKE+", 60),
-		_column_label("FAKE-", 60),
+		_column_label("HYPE", 60),
+		_column_label("FUD", 60),
 	]:
 		header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		grid.add_child(header)
@@ -931,18 +1015,18 @@ func _next_day_outlook() -> Control:
 		forecast.custom_minimum_size.x = 150
 		grid.add_child(forecast)
 		var fake_positive := Button.new()
-		fake_positive.text = "FAKE+"
+		fake_positive.text = "HYPE"
 		fake_positive.custom_minimum_size.x = 60
-		fake_positive.tooltip_text = "Plant uncertain positive news for £75."
+		fake_positive.tooltip_text = "Available during trading: plant uncertain positive news for £75.00."
 		fake_positive.pressed.connect(_quick_fake_news.bind(stock.symbol, 1))
-		fake_positive.disabled = session.network_mode or session.game_state.has_planted_fake_news(stock.symbol) or session.game_state.cash_pence < GameState.FAKE_NEWS_COST_PENCE
+		fake_positive.disabled = true
 		grid.add_child(fake_positive)
 		var fake_negative := Button.new()
-		fake_negative.text = "FAKE-"
+		fake_negative.text = "FUD"
 		fake_negative.custom_minimum_size.x = 60
-		fake_negative.tooltip_text = "Plant uncertain negative news for £75."
+		fake_negative.tooltip_text = "Available during trading: plant uncertain negative news for £75.00."
 		fake_negative.pressed.connect(_quick_fake_news.bind(stock.symbol, -1))
-		fake_negative.disabled = session.network_mode or session.game_state.has_planted_fake_news(stock.symbol) or session.game_state.cash_pence < GameState.FAKE_NEWS_COST_PENCE
+		fake_negative.disabled = true
 		grid.add_child(fake_negative)
 	content.add_child(grid)
 	panel.add_child(content)
