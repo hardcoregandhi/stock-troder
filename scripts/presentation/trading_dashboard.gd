@@ -35,6 +35,7 @@ var debrief_game_series: Array[Dictionary] = []
 var row_labels: Dictionary = {}
 var news_feed: VBoxContainer
 var news_filter: OptionButton
+var opponent_holdings_label: Label
 var news_history: Array[Dictionary] = []
 var pause_layer: Control
 var start_trading_button: Button
@@ -221,6 +222,9 @@ func _build_news_panel() -> Control:
 	news_filter.add_item("RESOLVED", 4)
 	news_filter.item_selected.connect(_on_news_filter_selected)
 	content.add_child(news_filter)
+	opponent_holdings_label = _label("PLAYERS\nLoading portfolios...", 10, TEXT)
+	opponent_holdings_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	content.add_child(opponent_holdings_label)
 	news_feed = VBoxContainer.new()
 	news_feed.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	news_feed.add_theme_constant_override("separation", 5)
@@ -403,6 +407,15 @@ func _refresh() -> void:
 	else:
 		_update_stock_rows(state)
 	_update_market_surface(state)
+	_update_opponent_holdings()
+
+func _update_opponent_holdings() -> void:
+	if opponent_holdings_label == null:
+		return
+	var lines: Array[String] = ["PLAYERS"]
+	for player in _display_rankings():
+		lines.append("%s: %s" % [str(player.get("display_name", "PLAYER %s" % str(player.get("player_id", "?")))), _holdings_text_from_dictionary(player.get("holdings", {}))])
+	opponent_holdings_label.text = "\n".join(lines)
 
 func _build_stock_rows(state: GameState) -> void:
 	for stock in state.stocks:
@@ -903,6 +916,9 @@ func _on_run_completed(summary: Dictionary) -> void:
 	content.add_theme_constant_override("separation", 12)
 	summary_panel.add_child(content)
 	content.add_child(_label("RUN COMPLETE", 24, TEXT))
+	var winner_id := int(summary.get("victory_player_id", 0))
+	if winner_id > 0:
+		content.add_child(_label("MILLIONAIRE VICTORY: PLAYER %d" % winner_id, 15, POSITIVE))
 	content.add_child(_label("Starting cash: %s" % _format_pence(int(summary["starting_cash_pence"])), 14, TEXT))
 	content.add_child(_label("Final cash: %s" % _format_pence(int(summary["final_cash_pence"])), 16, TEXT))
 	var profit := int(summary["profit_loss_pence"])

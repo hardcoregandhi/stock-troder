@@ -23,6 +23,7 @@ signal network_readiness_changed(ready_count: int, total_count: int, local_ready
 const DEFAULT_SEED: int = 42_4242
 const DAY_LENGTH_SECONDS: float = 30.0
 const MARKET_SAMPLE_INTERVAL_SECONDS: float = 0.5
+const MILLIONAIRE_TARGET_PENCE: int = 100_000_000
 
 var game_state: GameState
 var market_simulator: MarketSimulator
@@ -40,6 +41,7 @@ var network_trading_ready_total: int = 0
 var network_local_trading_ready: bool = false
 var network_rankings: Array[Dictionary] = []
 var completed_rounds: Array[Dictionary] = []
+var victory_player_id: int = 0
 var computer_players: Array[ComputerPlayer] = []
 var computer_player_states: Dictionary = {}
 
@@ -59,6 +61,7 @@ func start_run(run_seed: int = DEFAULT_SEED, run_total_days: int = GameState.DEF
 	trade_service = TradeService.new()
 	market_sample_elapsed = 0.0
 	completed_rounds.clear()
+	victory_player_id = 0
 	computer_players.clear()
 	computer_player_states.clear()
 	if include_computer_players:
@@ -498,6 +501,14 @@ func _on_day_timer_timed_out() -> void:
 		return
 	var resolved_day := game_state.current_day
 	var resolutions := market_simulator.resolve_day(game_state)
+	var millionaire_player_id := _millionaire_player_id()
+	if millionaire_player_id > 0:
+		victory_player_id = millionaire_player_id
+		game_state.phase = GameState.Phase.COMPLETE
+		for player_state in network_player_states.values():
+			player_state.phase = GameState.Phase.COMPLETE
+		for player_state in computer_player_states.values():
+			player_state.phase = GameState.Phase.COMPLETE
 	var is_final_day := game_state.phase == GameState.Phase.COMPLETE
 	completed_rounds.append(_round_record(resolved_day, resolutions))
 	if is_final_day:
@@ -546,6 +557,7 @@ func _run_summary_for(state: GameState) -> Dictionary:
 		"days_completed": state.total_days,
 		"holdings": state.holdings.duplicate(),
 		"ranking": _network_rankings(),
+		"victory_player_id": victory_player_id,
 		"completed_rounds": completed_rounds.duplicate(true),
 	}
 
@@ -618,3 +630,17 @@ func _computer_profile(player_id: int) -> String:
 		if player.player_id == player_id:
 			return player.risk_profile
 	return "AI"
+
+func _millionaire_player_id() -> int:
+	var states: Dictionary = network_player_states if network_mode and network_is_host else {network_local_player_id: game_state}
+	if not network_mode:
+		for player_id in computer_player_states:
+			states[player_id] = computer_player_states[player_id]
+	var winner_id := 0
+	var winner_value := 0
+	for player_id in states:
+		var portfolio_value: int = states[player_id].portfolio_value_pence()
+		if portfolio_value >= MILLIONAIRE_TARGET_PENCE and portfolio_value > winner_value:
+			winner_id = int(player_id)
+			winner_value = portfolio_value
+	return winner_id
