@@ -545,6 +545,11 @@ func _on_day_timer_timed_out() -> void:
 	var resolved_day := game_state.current_day
 	var resolutions := market_simulator.resolve_day(game_state)
 	var option_results := _settle_options(game_state)
+	if network_mode and network_is_host:
+		for player_state in network_player_states.values():
+			_settle_options(player_state)
+	for player_state in computer_player_states.values():
+		_settle_options(player_state)
 	var millionaire_player_id := _millionaire_player_id()
 	if millionaire_player_id > 0:
 		victory_player_id = millionaire_player_id
@@ -560,12 +565,10 @@ func _on_day_timer_timed_out() -> void:
 	if network_mode and network_is_host:
 		for player_state in network_player_states.values():
 			player_state.phase = game_state.phase
-			_settle_options(player_state)
 			if is_final_day:
 				trade_service.liquidate_all(player_state)
 	for player_state in computer_player_states.values():
 		player_state.phase = game_state.phase
-		_settle_options(player_state)
 		if is_final_day:
 			trade_service.liquidate_all(player_state)
 	day_resolved.emit(resolved_day, resolutions, state_snapshot())

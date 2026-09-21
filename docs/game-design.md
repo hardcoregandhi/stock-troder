@@ -34,12 +34,12 @@ The first playable version should make the buy/sell/beat-the-clock loop enjoyabl
 
 - Add player-driven market manipulation such as pumping or sabotaging a stock.
 - Add consequences, risk, cooldowns, and detection so manipulation is a strategic choice rather than a free bonus.
-- Add multiplayer only after the single-player simulation and user interface are stable.
+- Support up to four total participants, including computer players in single-player runs.
 
 ### Non-goals for the first prototype
 
 - Real-world stock data.
-- Fractional shares, options, short selling, or margin.
+- Fractional shares, short selling, or margin.
 - Persistent accounts or online services.
 - Real-time multiplayer.
 - Complex financial realism.
@@ -152,9 +152,11 @@ Sabotage is a single-player action available only during `TRADING`. It targets o
 
 Plant Fake News is a single-player action available only during `TRADING`. It targets one stock, costs £75.00 immediately, and can be used once per stock per round. The player chooses positive or negative direction. The action shifts the target's projection and live-path weighting by 3%, and the feed labels the story `PLAYER-PLANTED FAKE`. At resolution, a seeded outcome has a 55% chance to work, a 25% chance to have no effect, and a 20% chance to backfire by applying a 4% movement opposite the chosen direction. It never guarantees price movement.
 
+Calls and puts are long, one-round contracts. A contract uses the stock's current price as its strike and costs an 8% premium per contract. A call pays the positive difference between closing price and strike; a put pays the positive difference between strike and closing price. Premiums are paid immediately, contracts settle at resolution, and unused positions expire with no payout. Options do not provide leverage beyond the purchased quantity and do not allow margin or short selling.
+
 The player can see the cost, availability, and correction risk in the dashboard. Pump usage resets when the player selects **Next Day**. The debrief reports whether a Pump correction affected the resolved result.
 
-Sabotage and Fake News usage also reset when the player selects **Next Day**. The debrief reports sabotage correction status and whether Fake News worked, failed, or backfired. These are implemented single-player mechanics. Network requests are rejected as single-player-only actions. In older documents, "Phase 1.5" means a development milestone, not a gameplay phase or screen.
+Sabotage and Fake News usage also reset when the player selects **Next Day**. Each manipulation also has a one-day per-stock cooldown. The debrief reports sabotage correction status and whether Fake News worked, failed, or backfired. Pump, Sabotage, HYPE, and FUD are host-validated in multiplayer and available to computer players through the same action service.
 
 ## 6. Information and UI
 

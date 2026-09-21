@@ -4,6 +4,7 @@ extends McpTestSuite
 const OPTION_CONTRACT = preload("res://scripts/simulation/option_contract.gd")
 const GAME_STATE = preload("res://scripts/simulation/game_state.gd")
 const TRADE_SERVICE = preload("res://scripts/application/trade_service.gd")
+const TRADING_SESSION = preload("res://scripts/application/trading_session.gd")
 
 func suite_name() -> String:
 	return "option_contract"
@@ -35,3 +36,18 @@ func test_option_purchase_requires_trading_and_cash() -> void:
 	state.cash_pence = 399
 	assert_false(service.buy_put(state, "AUR")["success"])
 	assert_eq(state.option_positions.size(), 0)
+
+func test_session_settles_call_before_round_completion() -> void:
+	var session: TradingSession = TRADING_SESSION.new()
+	track(session)
+	session._ready()
+	session.start_run(55, 1, 1, false)
+	assert_true(session.start_trading_round())
+	var purchase := session.buy_call("AUR")
+	assert_true(purchase["success"])
+	var cash_after_purchase := session.game_state.cash_pence
+	session.game_state.get_stock("AUR").current_price_pence = 6_000
+	var settlements := session._settle_options(session.game_state)
+	assert_eq(settlements[0]["payout_pence"], 1_000)
+	assert_eq(session.game_state.cash_pence, cash_after_purchase + 1_000)
+	assert_eq(session.game_state.option_positions.size(), 0)

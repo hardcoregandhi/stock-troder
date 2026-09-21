@@ -219,9 +219,9 @@ Phase 1 has no transaction fee, but the result structure should leave room for o
 
 `StockData` stores the temporary round Pump state. `MarketSimulator` applies the 4% short-term live path boost and uses its seeded random generator at resolution for the 65% 8% correction risk or 35% 2% correction. The resolution record includes `pump_used`, `pump_correction`, and `pump_correction_percent`. `GameState.reset_round_manipulations()` clears usage when `TradingSession.continue_to_next_day()` starts the next round.
 
-#### Single-player Sabotage and Fake News boundary
+#### Sabotage, Fake News, and Options boundary
 
-`TradeService.sabotage(state, symbol)` validates `TRADING`, the target stock, one use per stock, and the 5,000 pence cost. It marks the target and applies -4% live pressure. `TradeService.plant_fake_news(state, symbol, direction)` validates the same phase, target, one-use rule, positive or negative direction, and the 7,500 pence cost. It updates the target projection weighting and labels its news as player-planted fake. `MarketSimulator` owns the seeded correction, failure, and backfire rolls. `TradingSession` emits structured action results and records all action markers in the debrief. Network manipulation requests are rejected before any player state changes because these actions are single-player only.
+`TradeService.sabotage(state, symbol)` validates `TRADING`, the target stock, one use per stock, cooldown, and the 5,000 pence cost. It marks the target and applies -4% live pressure. `TradeService.plant_fake_news(state, symbol, direction)` validates the same phase, target, one-use rule, cooldown, positive or negative direction, and the 7,500 pence cost. It updates the target projection weighting and labels its news as player-planted fake. `MarketSimulator` owns the seeded correction, failure, and backfire rolls. `TradingSession` emits structured action results and records all action markers in the debrief. Network manipulation requests are validated by the host before any remote portfolio changes. `OptionContract` stores long CALL and PUT positions with current-price strikes, integer-pence premiums, and one-round intrinsic-value settlement. AI and network portfolios use the same `TradeService` and settlement path.
 
 ### `TradingSession`
 
