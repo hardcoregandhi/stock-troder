@@ -113,6 +113,7 @@ func setup(new_session: TradingSession) -> void:
 	session.fake_news_rejected.connect(_on_trade_result)
 	session.option_completed.connect(_on_trade_result)
 	session.option_rejected.connect(_on_trade_result)
+	session.network_activity.connect(_on_network_activity)
 	session.computer_action_completed.connect(_on_computer_action)
 	session.run_completed.connect(_on_run_completed)
 	session.network_status_changed.connect(_on_network_status_changed)
@@ -350,6 +351,23 @@ func _on_computer_action(player_name: String, risk_profile: String, result: Dict
 		"change": 0.0,
 		"source": "AI ACTION",
 		"color": _stock_color(str(result.get("symbol", ""))),
+	})
+	if news_history.size() > 18:
+		news_history = news_history.slice(news_history.size() - 18)
+	_refresh()
+
+func _on_network_activity(player_id: int, activity_type: String, result: Dictionary) -> void:
+	var symbol := str(result.get("symbol", ""))
+	var action := str(result.get("action", activity_type)).to_upper()
+	var text := str(result.get("message", "%s activity on %s" % [action, symbol]))
+	news_history.append({
+		"day": session.game_state.current_day,
+		"symbol": symbol,
+		"text": "PLAYER %d: %s" % [player_id, text],
+		"resolved": false,
+		"change": 0.0,
+		"source": "NETWORK %s" % action,
+		"color": _stock_color(symbol),
 	})
 	if news_history.size() > 18:
 		news_history = news_history.slice(news_history.size() - 18)
@@ -599,7 +617,7 @@ func _news_entry_matches_filter(entry: Dictionary) -> bool:
 		1:
 			return source == "PLAYER TRADE"
 		2:
-			return source in ["PUMP", "SABOTAGE", "FAKE_NEWS", "AI ACTION"]
+			return source in ["PUMP", "SABOTAGE", "FAKE_NEWS", "AI ACTION"] or source.begins_with("NETWORK")
 		3:
 			return not resolved and source not in ["PLAYER TRADE", "PUMP", "SABOTAGE", "FAKE_NEWS"]
 		4:

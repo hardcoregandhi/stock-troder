@@ -21,6 +21,7 @@ signal day_resolved(day_number: int, resolution_result: Array[Dictionary], state
 signal run_completed(summary: Dictionary)
 signal network_status_changed(message: String)
 signal network_readiness_changed(ready_count: int, total_count: int, local_ready: bool)
+signal network_activity(player_id: int, activity_type: String, activity_result: Dictionary)
 
 const DEFAULT_SEED: int = 42_4242
 const DAY_LENGTH_SECONDS: float = 30.0
@@ -365,11 +366,11 @@ func apply_network_snapshot(snapshot: Dictionary) -> void:
 func apply_network_event(event: Dictionary) -> void:
 	match str(event.get("type", "")):
 		"trade":
-			_execute_trade(event["result"])
+			network_activity.emit(int(event.get("player_id", 0)), "trade", event["result"])
 		"action":
-			_emit_manipulation_result(event["result"])
+			network_activity.emit(int(event.get("player_id", 0)), "action", event["result"])
 		"option":
-			_emit_option_result(event["result"])
+			network_activity.emit(int(event.get("player_id", 0)), "option", event["result"])
 		"day_resolved":
 			day_resolved.emit(int(event["day"]), event["resolutions"], state_snapshot())
 		"brief_started":
@@ -429,26 +430,36 @@ func _publish_network_state() -> void:
 func _execute_network_trade(player_id: int, result: Dictionary) -> Dictionary:
 	if player_id == network_local_player_id:
 		_execute_trade(result)
-	elif network_lobby != null:
-		network_lobby.send_match_event({"type": "trade", "result": result}, player_id)
+	else:
+		network_activity.emit(player_id, "trade", result)
+	_broadcast_network_activity(player_id, "trade", result)
 	_publish_network_state()
 	return result
 
 func _execute_network_manipulation(player_id: int, result: Dictionary) -> Dictionary:
 	if player_id == network_local_player_id:
 		_emit_manipulation_result(result)
-	elif network_lobby != null:
-		network_lobby.send_match_event({"type": "action", "result": result, "player_id": player_id}, player_id)
+	else:
+		network_activity.emit(player_id, "action", result)
+	_broadcast_network_activity(player_id, "action", result)
 	_publish_network_state()
 	return result
 
 func _execute_network_option(player_id: int, result: Dictionary) -> Dictionary:
 	if player_id == network_local_player_id:
 		_emit_option_result(result)
-	elif network_lobby != null:
-		network_lobby.send_match_event({"type": "option", "result": result, "player_id": player_id}, player_id)
+	else:
+		network_activity.emit(player_id, "option", result)
+	_broadcast_network_activity(player_id, "option", result)
 	_publish_network_state()
 	return result
+
+func _broadcast_network_activity(player_id: int, activity_type: String, result: Dictionary) -> void:
+	if network_lobby == null:
+		return
+	for recipient_id in network_player_states:
+		if recipient_id != network_local_player_id:
+			network_lobby.send_match_event({"type": activity_type, "player_id": player_id, "result": result}, recipient_id)
 
 func _emit_manipulation_result(result: Dictionary) -> void:
 	var action := str(result.get("action", ""))

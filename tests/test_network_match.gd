@@ -46,6 +46,28 @@ func test_host_validates_remote_intent_against_remote_state() -> void:
 	assert_eq(remote_state.holdings["AUR"], 0)
 	assert_eq(remote_state.cash_pence, remote_state.starting_cash_pence)
 
+func test_remote_trade_emits_shared_activity_event() -> void:
+	var session: TradingSession = TRADING_SESSION.new()
+	track(session)
+	session._ready()
+	session.network_mode = true
+	session.network_is_host = true
+	session.network_local_player_id = 1
+	session.game_state = GAME_STATE.new(42, 2)
+	session.game_state.phase = GAME_STATE.Phase.TRADING
+	session.market_simulator = MarketSimulator.new(42)
+	session.trade_service = TradeService.new()
+	var remote_state: GameState = GAME_STATE.new(42, 2)
+	remote_state.stocks = session.game_state.stocks
+	remote_state.phase = GAME_STATE.Phase.TRADING
+	session.network_player_states = {1: session.game_state, 2: remote_state}
+	var activities: Array = []
+	session.network_activity.connect(func(player_id: int, activity_type: String, result: Dictionary) -> void: activities.append([player_id, activity_type, result]))
+	session.receive_network_intent(2, "buy", "AUR", 1)
+	assert_eq(activities.size(), 1)
+	assert_eq(activities[0][0], 2)
+	assert_eq(activities[0][1], "trade")
+
 func test_unknown_peer_intent_cannot_change_host_state() -> void:
 	var session: TradingSession = TRADING_SESSION.new()
 	track(session)
