@@ -77,6 +77,25 @@ func test_network_host_validates_sabotage_and_fake_news_actions() -> void:
 	assert_true(remote_state.has_sabotaged("AUR"))
 	assert_true(remote_state.has_planted_fake_news("BRK"))
 
+func test_network_host_validates_option_orders() -> void:
+	var session: TradingSession = TRADING_SESSION.new()
+	track(session)
+	session._ready()
+	session.network_mode = true
+	session.network_is_host = true
+	session.game_state = GAME_STATE.new(42, 2)
+	session.game_state.phase = GAME_STATE.Phase.TRADING
+	session.trade_service = TradeService.new()
+	var remote_state: GameState = GAME_STATE.new(42, 2)
+	remote_state.stocks = session.game_state.stocks
+	remote_state.phase = GAME_STATE.Phase.TRADING
+	session.network_player_states = {1: session.game_state, 2: remote_state}
+	var call_result := session.receive_network_intent(2, "call", "AUR", 1)
+	var put_result := session.receive_network_intent(2, "put", "BRK", 1)
+	assert_true(call_result["success"])
+	assert_true(put_result["success"])
+	assert_eq(remote_state.option_positions.size(), 2)
+
 func test_host_ranking_uses_authoritative_portfolio_values() -> void:
 	var session: TradingSession = TRADING_SESSION.new()
 	track(session)

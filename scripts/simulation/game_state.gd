@@ -27,6 +27,7 @@ var total_days: int = DEFAULT_TOTAL_DAYS
 var phase: Phase = Phase.PREPARING
 var stocks: Array[StockData] = []
 var holdings: Dictionary = {}
+var option_positions: Array[OptionContract] = []
 var pumped_symbols: Dictionary = {}
 var sabotaged_symbols: Dictionary = {}
 var fake_news_symbols: Dictionary = {}
@@ -68,6 +69,12 @@ func apply_sell_shares(symbol: String, quantity: int) -> void:
 	var stock := get_stock(symbol)
 	cash_pence += stock.current_price_pence * quantity
 	holdings[symbol] -= quantity
+
+func add_option_position(option: OptionContract) -> void:
+	option_positions.append(option)
+
+func clear_option_positions() -> void:
+	option_positions.clear()
 
 func mark_pumped(symbol: String) -> void:
 	pumped_symbols[symbol] = true

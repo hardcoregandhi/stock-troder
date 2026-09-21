@@ -111,6 +111,8 @@ func setup(new_session: TradingSession) -> void:
 	session.sabotage_rejected.connect(_on_trade_result)
 	session.fake_news_completed.connect(_on_trade_result)
 	session.fake_news_rejected.connect(_on_trade_result)
+	session.option_completed.connect(_on_trade_result)
+	session.option_rejected.connect(_on_trade_result)
 	session.computer_action_completed.connect(_on_computer_action)
 	session.run_completed.connect(_on_run_completed)
 	session.network_status_changed.connect(_on_network_status_changed)
@@ -453,34 +455,52 @@ func _build_stock_rows(state: GameState) -> void:
 		sell.pressed.connect(_quick_sell.bind(stock.symbol))
 		trade_actions.add_child(sell)
 		stock_list.add_child(trade_actions)
-		var market_actions := HBoxContainer.new()
+		var market_actions := VBoxContainer.new()
 		market_actions.add_theme_constant_override("separation", 3)
+		var manipulation_actions := HBoxContainer.new()
+		manipulation_actions.add_theme_constant_override("separation", 3)
 		var pump := Button.new()
 		pump.text = "PUMP"
 		pump.tooltip_text = "Spend £25.00 to lift this stock's live path."
 		pump.custom_minimum_size = Vector2(50, 28)
 		pump.pressed.connect(_quick_pump.bind(stock.symbol))
-		market_actions.add_child(pump)
+		manipulation_actions.add_child(pump)
 		var sabotage := Button.new()
 		sabotage.text = "SAB"
 		sabotage.tooltip_text = "Spend £50.00 to add negative live pressure. Resolution risk remains."
 		sabotage.custom_minimum_size = Vector2(42, 28)
 		sabotage.pressed.connect(_quick_sabotage.bind(stock.symbol))
-		market_actions.add_child(sabotage)
+		manipulation_actions.add_child(sabotage)
 		var hype := Button.new()
 		hype.text = "HYPE"
 		hype.tooltip_text = "Plant uncertain positive news for £75.00."
 		hype.custom_minimum_size = Vector2(50, 28)
 		hype.pressed.connect(_quick_fake_news.bind(stock.symbol, 1))
-		market_actions.add_child(hype)
+		manipulation_actions.add_child(hype)
 		var fud := Button.new()
 		fud.text = "FUD"
 		fud.tooltip_text = "Plant uncertain negative news for £75.00."
 		fud.custom_minimum_size = Vector2(44, 28)
 		fud.pressed.connect(_quick_fake_news.bind(stock.symbol, -1))
-		market_actions.add_child(fud)
+		manipulation_actions.add_child(fud)
+		market_actions.add_child(manipulation_actions)
+		var option_actions := HBoxContainer.new()
+		option_actions.add_theme_constant_override("separation", 3)
+		var call := Button.new()
+		call.text = "CALL"
+		call.tooltip_text = "Buy a one-round call at the current price. Premium is 8%."
+		call.custom_minimum_size = Vector2(62, 28)
+		call.pressed.connect(_quick_call.bind(stock.symbol))
+		option_actions.add_child(call)
+		var put := Button.new()
+		put.text = "PUT"
+		put.tooltip_text = "Buy a one-round put at the current price. Premium is 8%."
+		put.custom_minimum_size = Vector2(55, 28)
+		put.pressed.connect(_quick_put.bind(stock.symbol))
+		option_actions.add_child(put)
+		market_actions.add_child(option_actions)
 		stock_list.add_child(market_actions)
-		row_labels[stock.symbol] = {"price": price, "change": change, "range": range, "shares": null, "position": position, "buy": buy, "sell": sell, "pump": pump, "sabotage": sabotage, "hype": hype, "fud": fud}
+		row_labels[stock.symbol] = {"price": price, "change": change, "range": range, "shares": null, "position": position, "buy": buy, "sell": sell, "pump": pump, "sabotage": sabotage, "hype": hype, "fud": fud, "call": call, "put": put}
 	_update_stock_rows(state)
 
 func _update_stock_rows(state: GameState) -> void:
@@ -499,18 +519,20 @@ func _update_stock_rows(state: GameState) -> void:
 		var pump_active := state.has_pumped(stock.symbol) and stock.pump_active
 		labels["pump"].text = "PUMP ON" if pump_active else "PUMP"
 		labels["pump"].tooltip_text = "ACTIVE: +4.0% live path; correction risk remains." if pump_active else "Spend £25.00 to lift this stock's live path."
-		labels["pump"].disabled = session.network_mode or not can_trade or pump_active or state.action_on_cooldown("pump", stock.symbol) or state.cash_pence < GameState.PUMP_COST_PENCE
+		labels["pump"].disabled = not can_trade or pump_active or state.action_on_cooldown("pump", stock.symbol) or state.cash_pence < GameState.PUMP_COST_PENCE
 		var sabotage_active := state.has_sabotaged(stock.symbol) and stock.sabotage_active
 		labels["sabotage"].text = "SAB ON" if sabotage_active else "SABOTAGE"
 		labels["sabotage"].tooltip_text = "ACTIVE: negative live pressure; resolution risk remains." if sabotage_active else "Spend £50.00 to add negative live pressure."
-		labels["sabotage"].disabled = session.network_mode or not can_trade or sabotage_active or state.action_on_cooldown("sabotage", stock.symbol) or state.cash_pence < GameState.SABOTAGE_COST_PENCE
+		labels["sabotage"].disabled = not can_trade or sabotage_active or state.action_on_cooldown("sabotage", stock.symbol) or state.cash_pence < GameState.SABOTAGE_COST_PENCE
 		var fake_news_active := state.has_planted_fake_news(stock.symbol) and stock.fake_news_active
 		labels["hype"].text = "HYPE ON" if fake_news_active and stock.fake_news_direction > 0 else "HYPE"
 		labels["hype"].tooltip_text = "ACTIVE: uncertain positive planted news." if fake_news_active and stock.fake_news_direction > 0 else "Plant uncertain positive news for £75.00."
-		labels["hype"].disabled = session.network_mode or not can_trade or fake_news_active or state.action_on_cooldown("fake_news", stock.symbol) or state.cash_pence < GameState.FAKE_NEWS_COST_PENCE
+		labels["hype"].disabled = not can_trade or fake_news_active or state.action_on_cooldown("fake_news", stock.symbol) or state.cash_pence < GameState.FAKE_NEWS_COST_PENCE
 		labels["fud"].text = "FUD ON" if fake_news_active and stock.fake_news_direction < 0 else "FUD"
 		labels["fud"].tooltip_text = "ACTIVE: uncertain negative planted news." if fake_news_active and stock.fake_news_direction < 0 else "Plant uncertain negative news for £75.00."
-		labels["fud"].disabled = session.network_mode or not can_trade or fake_news_active or state.action_on_cooldown("fake_news", stock.symbol) or state.cash_pence < GameState.FAKE_NEWS_COST_PENCE
+		labels["fud"].disabled = not can_trade or fake_news_active or state.action_on_cooldown("fake_news", stock.symbol) or state.cash_pence < GameState.FAKE_NEWS_COST_PENCE
+		labels["call"].disabled = not can_trade or state.cash_pence < maxi(100, roundi(float(stock.current_price_pence) * 0.08))
+		labels["put"].disabled = not can_trade or state.cash_pence < maxi(100, roundi(float(stock.current_price_pence) * 0.08))
 
 func _update_market_surface(state: GameState) -> void:
 	var chart_series: Array[Dictionary] = []
@@ -598,6 +620,12 @@ func _quick_sabotage(symbol: String) -> void:
 
 func _quick_fake_news(symbol: String, direction: int) -> void:
 	session.plant_fake_news(symbol, direction)
+
+func _quick_call(symbol: String) -> void:
+	session.buy_call(symbol)
+
+func _quick_put(symbol: String) -> void:
+	session.buy_put(symbol)
 
 func _open_pause_menu() -> void:
 	if pause_layer != null:

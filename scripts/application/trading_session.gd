@@ -14,6 +14,8 @@ signal sabotage_completed(sabotage_result: Dictionary)
 signal sabotage_rejected(sabotage_result: Dictionary)
 signal fake_news_completed(fake_news_result: Dictionary)
 signal fake_news_rejected(fake_news_result: Dictionary)
+signal option_completed(option_result: Dictionary)
+signal option_rejected(option_result: Dictionary)
 signal computer_action_completed(player_name: String, risk_profile: String, action_result: Dictionary)
 signal day_resolved(day_number: int, resolution_result: Array[Dictionary], state_snapshot: Dictionary)
 signal run_completed(summary: Dictionary)
@@ -127,6 +129,10 @@ func receive_network_intent(peer_id: int, action: String, symbol: String, quanti
 		return _execute_network_manipulation(peer_id, trade_service.sabotage(network_player_states[peer_id], symbol))
 	elif action == "fake_news_positive" or action == "fake_news_negative":
 		return _execute_network_manipulation(peer_id, trade_service.plant_fake_news(network_player_states[peer_id], symbol, quantity))
+	elif action == "call":
+		return _execute_network_option(peer_id, trade_service.buy_call(network_player_states[peer_id], symbol, quantity))
+	elif action == "put":
+		return _execute_network_option(peer_id, trade_service.buy_put(network_player_states[peer_id], symbol, quantity))
 	elif action == "ready_for_next_day":
 		_mark_network_player_ready(peer_id)
 	elif action == "ready_for_trading":
@@ -196,6 +202,33 @@ func plant_fake_news(symbol: String, direction: int) -> Dictionary:
 		fake_news_rejected.emit(result)
 	market_updated.emit(state_snapshot())
 	return result
+
+func buy_call(symbol: String, quantity: int = 1) -> Dictionary:
+	if network_mode and not network_is_host:
+		network_lobby.submit_call(symbol)
+		return {"success": true, "pending": true, "message": "Call sent to host.", "symbol": symbol}
+	if network_mode:
+		return _execute_network_option(network_local_player_id, trade_service.buy_call(game_state, symbol, quantity))
+	var result := trade_service.buy_call(game_state, symbol, quantity)
+	_emit_option_result(result)
+	return result
+
+func buy_put(symbol: String, quantity: int = 1) -> Dictionary:
+	if network_mode and not network_is_host:
+		network_lobby.submit_put(symbol)
+		return {"success": true, "pending": true, "message": "Put sent to host.", "symbol": symbol}
+	if network_mode:
+		return _execute_network_option(network_local_player_id, trade_service.buy_put(game_state, symbol, quantity))
+	var result := trade_service.buy_put(game_state, symbol, quantity)
+	_emit_option_result(result)
+	return result
+
+func _emit_option_result(result: Dictionary) -> void:
+	if bool(result.get("success", false)):
+		option_completed.emit(result)
+	else:
+		option_rejected.emit(result)
+	market_updated.emit(state_snapshot())
 
 func continue_to_next_day() -> bool:
 	if network_mode and not network_is_host:
@@ -335,6 +368,8 @@ func apply_network_event(event: Dictionary) -> void:
 			_execute_trade(event["result"])
 		"action":
 			_emit_manipulation_result(event["result"])
+		"option":
+			_emit_option_result(event["result"])
 		"day_resolved":
 			day_resolved.emit(int(event["day"]), event["resolutions"], state_snapshot())
 		"brief_started":
@@ -404,6 +439,14 @@ func _execute_network_manipulation(player_id: int, result: Dictionary) -> Dictio
 		_emit_manipulation_result(result)
 	elif network_lobby != null:
 		network_lobby.send_match_event({"type": "action", "result": result, "player_id": player_id}, player_id)
+	_publish_network_state()
+	return result
+
+func _execute_network_option(player_id: int, result: Dictionary) -> Dictionary:
+	if player_id == network_local_player_id:
+		_emit_option_result(result)
+	elif network_lobby != null:
+		network_lobby.send_match_event({"type": "option", "result": result, "player_id": player_id}, player_id)
 	_publish_network_state()
 	return result
 
@@ -501,6 +544,7 @@ func _on_day_timer_timed_out() -> void:
 		return
 	var resolved_day := game_state.current_day
 	var resolutions := market_simulator.resolve_day(game_state)
+	var option_results := _settle_options(game_state)
 	var millionaire_player_id := _millionaire_player_id()
 	if millionaire_player_id > 0:
 		victory_player_id = millionaire_player_id
@@ -510,16 +554,18 @@ func _on_day_timer_timed_out() -> void:
 		for player_state in computer_player_states.values():
 			player_state.phase = GameState.Phase.COMPLETE
 	var is_final_day := game_state.phase == GameState.Phase.COMPLETE
-	completed_rounds.append(_round_record(resolved_day, resolutions))
+	completed_rounds.append(_round_record(resolved_day, resolutions, option_results))
 	if is_final_day:
 		trade_service.liquidate_all(game_state)
 	if network_mode and network_is_host:
 		for player_state in network_player_states.values():
 			player_state.phase = game_state.phase
+			_settle_options(player_state)
 			if is_final_day:
 				trade_service.liquidate_all(player_state)
 	for player_state in computer_player_states.values():
 		player_state.phase = game_state.phase
+		_settle_options(player_state)
 		if is_final_day:
 			trade_service.liquidate_all(player_state)
 	day_resolved.emit(resolved_day, resolutions, state_snapshot())
@@ -561,7 +607,7 @@ func _run_summary_for(state: GameState) -> Dictionary:
 		"completed_rounds": completed_rounds.duplicate(true),
 	}
 
-func _round_record(day: int, resolutions: Array[Dictionary]) -> Dictionary:
+func _round_record(day: int, resolutions: Array[Dictionary], option_results: Array[Dictionary] = []) -> Dictionary:
 	var records: Array[Dictionary] = []
 	for stock in game_state.stocks:
 		records.append({
@@ -582,7 +628,26 @@ func _round_record(day: int, resolutions: Array[Dictionary]) -> Dictionary:
 		"pump_markers": resolutions.filter(func(item: Dictionary) -> bool: return bool(item.get("pump_used", false))),
 		"sabotage_markers": resolutions.filter(func(item: Dictionary) -> bool: return bool(item.get("sabotage_used", false))),
 		"fake_news_markers": resolutions.filter(func(item: Dictionary) -> bool: return bool(item.get("fake_news_used", false))),
+		"option_settlements": option_results.duplicate(true),
 	}
+
+func _settle_options(state: GameState) -> Array[Dictionary]:
+	var settlements: Array[Dictionary] = []
+	for option in state.option_positions:
+		var stock := state.get_stock(option.symbol)
+		if stock == null:
+			continue
+		var payout := option.payoff_pence(stock.current_price_pence)
+		state.cash_pence += payout
+		settlements.append({
+			"type": option.option_type,
+			"symbol": option.symbol,
+			"strike_price_pence": option.strike_price_pence,
+			"payout_pence": payout,
+			"quantity": option.quantity,
+		})
+	state.clear_option_positions()
+	return settlements
 
 func _network_action_rejection(symbol: String, action: String) -> Dictionary:
 	var label := "Sabotage" if action == "sabotage" else "Fake News"

@@ -31,6 +31,15 @@ func _make_decision(state: GameState, trade_service: TradeService) -> Dictionary
 	if stock == null:
 		return {}
 	var manipulation_roll := random.randf()
+	if risk_profile == "AGGRESSIVE" and random.randf() < 0.12:
+		if stock.projection_change >= 0.03:
+			var call_result := trade_service.buy_call(state, stock.symbol)
+			if bool(call_result.get("success", false)):
+				return call_result
+		elif stock.projection_change <= -0.03:
+			var put_result := trade_service.buy_put(state, stock.symbol)
+			if bool(put_result.get("success", false)):
+				return put_result
 	if manipulation_roll < _manipulation_chance():
 		var manipulation := _try_manipulation(state, trade_service, stock)
 		if not manipulation.is_empty():

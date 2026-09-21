@@ -90,6 +90,28 @@ func plant_fake_news(state: GameState, symbol: String, direction: int) -> Dictio
 	stock.activate_fake_news(normalized_direction, projection_weight, stock.current_news)
 	return _manipulation_result(state, true, "Player-planted fake news posted for %s: %s direction. £75.00 spent; outcome is uncertain." % [symbol, "positive" if normalized_direction > 0 else "negative"], symbol, "fake_news", GameState.FAKE_NEWS_COST_PENCE, projection_weight, normalized_direction)
 
+func buy_call(state: GameState, symbol: String, quantity: int = 1) -> Dictionary:
+	return _buy_option(state, symbol, quantity, OptionContract.CALL)
+
+func buy_put(state: GameState, symbol: String, quantity: int = 1) -> Dictionary:
+	return _buy_option(state, symbol, quantity, OptionContract.PUT)
+
+func _buy_option(state: GameState, symbol: String, quantity: int, option_type: String) -> Dictionary:
+	var stock := state.get_stock(symbol)
+	if state.phase != GameState.Phase.TRADING:
+		return _option_result(state, false, "%s options are only available during trading." % option_type, symbol, option_type, 0, 0, 0, quantity)
+	if stock == null:
+		return _option_result(state, false, "Unknown stock.", symbol, option_type, 0, 0, 0, quantity)
+	if quantity <= 0:
+		return _option_result(state, false, "Quantity must be positive.", symbol, option_type, 0, 0, 0, quantity)
+	var premium_per_contract := maxi(100, roundi(float(stock.current_price_pence) * 0.08))
+	var total_premium := premium_per_contract * quantity
+	if total_premium > state.cash_pence:
+		return _option_result(state, false, "Not enough cash for %s." % option_type, symbol, option_type, 0, premium_per_contract, 0, quantity)
+	state.cash_pence -= total_premium
+	state.add_option_position(OptionContract.new(option_type, symbol, stock.current_price_pence, total_premium, quantity, state.current_day))
+	return _option_result(state, true, "Bought %s on %s at %s strike for %s." % [option_type, symbol, _format_pence(stock.current_price_pence), _format_pence(total_premium)], symbol, option_type, total_premium, premium_per_contract, stock.current_price_pence, quantity)
+
 func liquidate_all(state: GameState) -> int:
 	var liquidated_value := 0
 	for stock in state.stocks:
@@ -99,6 +121,23 @@ func liquidate_all(state: GameState) -> int:
 		liquidated_value += stock.current_price_pence * quantity
 		state.apply_sell_shares(stock.symbol, quantity)
 	return liquidated_value
+
+func _option_result(state: GameState, success: bool, message: String, symbol: String, option_type: String, premium_pence: int, premium_per_contract: int, strike_pence: int, quantity: int) -> Dictionary:
+	return {
+		"success": success,
+		"message": message,
+		"action": "option",
+		"option_type": option_type,
+		"symbol": symbol,
+		"quantity": quantity,
+		"premium_pence": premium_pence,
+		"premium_per_contract_pence": premium_per_contract,
+		"strike_price_pence": strike_pence,
+		"cash_after_action": state.cash_pence,
+	}
+
+func _format_pence(value: int) -> String:
+	return "£%d.%02d" % [value / 100, value % 100]
 
 func _trade_result(
 	state: GameState,

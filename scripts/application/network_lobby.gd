@@ -109,6 +109,12 @@ func submit_sabotage(symbol: String) -> void:
 func submit_fake_news(symbol: String, direction: int) -> void:
 	_submit_intent.rpc_id(1, "fake_news_positive" if direction > 0 else "fake_news_negative", symbol, direction)
 
+func submit_call(symbol: String) -> void:
+	_submit_intent.rpc_id(1, "call", symbol, 1)
+
+func submit_put(symbol: String) -> void:
+	_submit_intent.rpc_id(1, "put", symbol, 1)
+
 func submit_ready_for_next_day() -> void:
 	_submit_intent.rpc_id(1, "ready_for_next_day", "", 0)
 
