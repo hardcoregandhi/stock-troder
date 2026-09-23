@@ -9,6 +9,7 @@ var previous_price_pence: int
 var round_open_price_pence: int
 var price_history_pence: Array[int] = []
 var live_price_history_pence: Array[int] = []
+var round_history_pence: Array = []
 var volatility: float
 var trend: float
 var news_events: Array[Dictionary] = []
@@ -117,6 +118,7 @@ func append_resolved_price(price_pence: int) -> void:
 	current_price_pence = maxi(100, price_pence)
 	price_history_pence.append(current_price_pence)
 	live_price_history_pence.append(current_price_pence)
+	round_history_pence.append(live_price_history_pence.duplicate())
 
 func activate_pump(live_boost: float) -> void:
 	pump_active = true
@@ -146,10 +148,27 @@ func clear_manipulation() -> void:
 	fake_news_active = false
 
 func graph_history_pence() -> Array[int]:
-	var history: Array[int] = price_history_pence.duplicate()
-	for index in range(1, live_price_history_pence.size()):
-		history.append(live_price_history_pence[index])
+	var history: Array[int] = []
+	for round_prices in round_history_pence:
+		history.append_array(round_prices)
+	history.append_array(live_price_history_pence)
 	return history
+
+func recent_performance_weight(round_count: int = 3, response_weight: float = 0.18, maximum_weight: float = 0.025) -> float:
+	if price_history_pence.size() < 2:
+		return 0.0
+	var first_round := maxi(1, price_history_pence.size() - round_count)
+	var total_change := 0.0
+	var sample_count := 0
+	for index in range(first_round, price_history_pence.size()):
+		var opening_price := price_history_pence[index - 1]
+		if opening_price <= 0:
+			continue
+		total_change += float(price_history_pence[index] - opening_price) / float(opening_price)
+		sample_count += 1
+	if sample_count == 0:
+		return 0.0
+	return clampf((total_change / float(sample_count)) * response_weight, -maximum_weight, maximum_weight)
 
 func _confidence_label() -> String:
 	if volatility <= 0.03:

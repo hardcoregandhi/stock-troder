@@ -17,15 +17,15 @@ func test_call_and_put_pay_intrinsic_value() -> void:
 	assert_eq(put.payoff_pence(4_000), 2_000)
 	assert_eq(put.payoff_pence(6_000), 0)
 
-func test_option_purchase_charges_eight_percent_premium() -> void:
+func test_option_purchase_charges_volatility_based_premium() -> void:
 	var state: GameState = GAME_STATE.new(42, 2)
 	state.phase = GAME_STATE.Phase.TRADING
 	var service: TradeService = TRADE_SERVICE.new()
 	var result := service.buy_call(state, "AUR")
 	assert_true(result["success"])
 	assert_eq(result["strike_price_pence"], 5_000)
-	assert_eq(result["premium_pence"], 400)
-	assert_eq(state.cash_pence, state.starting_cash_pence - 400)
+	assert_eq(result["premium_pence"], 313)
+	assert_eq(state.cash_pence, state.starting_cash_pence - 313)
 	assert_eq(state.option_positions.size(), 1)
 
 func test_option_purchase_requires_trading_and_cash() -> void:

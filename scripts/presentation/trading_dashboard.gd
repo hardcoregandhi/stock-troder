@@ -3,14 +3,15 @@ extends Control
 
 signal exit_to_main_menu_requested
 
-const BG := Color("101820")
-const PANEL := Color("182733")
-const PANEL_LIGHT := Color("203545")
-const TEXT := Color("edf4f6")
-const MUTED := Color("9bb0b8")
-const POSITIVE := Color("55d6a3")
-const NEGATIVE := Color("ff7b72")
-const ACCENT := Color("65b9d6")
+const BG := Color("0b0f17")
+const PANEL := Color("11161f")
+const PANEL_LIGHT := Color("171e29")
+const TEXT := Color("edf2f7")
+const MUTED := Color("7d899b")
+const POSITIVE := Color("35d6ad")
+const NEGATIVE := Color("f05c79")
+const ACCENT := Color("48c7da")
+const BORDER := Color("202938")
 
 var session: TradingSession
 var day_label: Label
@@ -18,7 +19,7 @@ var clock_label: Label
 var cash_label: Label
 var portfolio_label: Label
 var return_label: Label
-var stock_list: VBoxContainer
+var stock_list: GridContainer
 var trade_feedback: Label
 var network_status: Label
 var chart: StockHistoryChart
@@ -43,6 +44,8 @@ var responsive_page: Control
 var dashboard_body: HBoxContainer
 var secondary_tabs: TabContainer
 var secondary_panel: Control
+var chart_range: String = "ROUND"
+var chart_range_buttons: Dictionary = {}
 
 class ResponsiveShell extends Control:
 	var content: Control
@@ -74,7 +77,7 @@ class StockHistoryChart extends Control:
 		queue_redraw()
 
 	func _draw() -> void:
-		var area := Rect2(58.0, 18.0, size.x - 70.0, size.y - 48.0)
+		var area := Rect2(56.0, 34.0, size.x - 70.0, size.y - 74.0)
 		if area.size.x <= 0.0 or area.size.y <= 0.0:
 			return
 		var drawable_series: Array[Dictionary] = []
@@ -96,14 +99,14 @@ class StockHistoryChart extends Control:
 			var y := area.position.y + area.size.y * fraction
 			draw_line(Vector2(area.position.x, y), Vector2(area.end.x, y), grid_color, 1.0)
 			var label_value := maximum - spread * fraction
-			draw_string(ThemeDB.fallback_font, Vector2(2.0, y + 4.0), _format_percentage(label_value), HORIZONTAL_ALIGNMENT_LEFT, 52.0, 11, MUTED)
+			draw_string(ThemeDB.fallback_font, Vector2(2.0, y + 4.0), _format_percentage(label_value), HORIZONTAL_ALIGNMENT_LEFT, 48.0, 10, MUTED)
 		for index in range(1, 4):
 			var x := area.position.x + area.size.x * float(index) / 4.0
 			draw_line(Vector2(x, area.position.y), Vector2(x, area.end.y), grid_color, 1.0)
 		draw_line(Vector2(area.position.x, area.end.y), Vector2(area.end.x, area.end.y), MUTED, 1.0)
-		draw_string(ThemeDB.fallback_font, Vector2(area.position.x, size.y - 10.0), "OLDER", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 10, MUTED)
-		draw_string(ThemeDB.fallback_font, Vector2(area.end.x - 30.0, size.y - 10.0), "NOW", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 10, MUTED)
-		draw_string(ThemeDB.fallback_font, Vector2(area.position.x, 12.0), "% FROM ROUND OPEN", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 10, MUTED)
+		draw_string(ThemeDB.fallback_font, Vector2(area.position.x, size.y - 10.0), "ROUND OPEN", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 10, MUTED)
+		draw_string(ThemeDB.fallback_font, Vector2(area.end.x - 24.0, size.y - 10.0), "NOW", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 10, MUTED)
+		draw_string(ThemeDB.fallback_font, Vector2(area.position.x, 16.0), "% CHANGE FROM RANGE START", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 10, MUTED)
 		for item in drawable_series:
 			var values: Array = item["values"]
 			var points := PackedVector2Array()
@@ -114,6 +117,9 @@ class StockHistoryChart extends Control:
 			var line_color: Color = item["color"]
 			draw_polyline(points, line_color, 2.0, true)
 			draw_circle(points[points.size() - 1], 3.0, line_color)
+			var legend_x := area.position.x + drawable_series.find(item) * 86.0
+			draw_line(Vector2(legend_x, 24.0), Vector2(legend_x + 16.0, 24.0), line_color, 2.0)
+			draw_string(ThemeDB.fallback_font, Vector2(legend_x + 21.0, 28.0), str(item.get("symbol", "")), HORIZONTAL_ALIGNMENT_LEFT, 62.0, 10, line_color)
 
 	func _format_percentage(value: float) -> String:
 		return "%+.1f%%" % value
@@ -162,7 +168,7 @@ func _build_ui() -> void:
 	shell._apply_content_layout()
 	var page_layout := VBoxContainer.new()
 	page_layout.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	page_layout.add_theme_constant_override("separation", 14)
+	page_layout.add_theme_constant_override("separation", 12)
 	responsive_page.add_child(page_layout)
 	page_layout.add_child(_build_status_bar())
 	dashboard_body = HBoxContainer.new()
@@ -207,6 +213,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _build_status_bar() -> Control:
 	var panel := _panel()
+	panel.custom_minimum_size.y = 68
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 18)
 	panel.add_child(row)
@@ -216,10 +223,10 @@ func _build_status_bar() -> Control:
 	grid.add_theme_constant_override("h_separation", 30)
 	grid.add_theme_constant_override("v_separation", 2)
 	row.add_child(grid)
-	day_label = _status_item(grid, "DAY / ROUND", "DAY 1 / 10", TEXT)
-	clock_label = _status_item(grid, "TIME LEFT", "30.0s", ACCENT)
+	day_label = _status_item(grid, "ROUND", "DAY 1 / 10", TEXT)
+	clock_label = _status_item(grid, "ROUND ENDS IN", "30.0s", ACCENT)
 	cash_label = _status_item(grid, "CASH", "£0.00", TEXT)
-	portfolio_label = _status_item(grid, "PORTFOLIO", "£0.00", TEXT)
+	portfolio_label = _status_item(grid, "PORTFOLIO VALUE", "£0.00", TEXT)
 	return_label = _status_item(grid, "RETURN", "£0.00", POSITIVE)
 	var status_spacer := Control.new()
 	status_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -236,7 +243,7 @@ func _status_item(parent: Control, caption: String, value: String, color: Color)
 	box.custom_minimum_size.x = 150
 	parent.add_child(box)
 	box.add_child(_label(caption, 11, MUTED))
-	var result := _label(value, 20, color)
+	var result := _label(value, 17, color)
 	box.add_child(result)
 	return result
 
@@ -248,24 +255,57 @@ func _build_market_panel() -> Control:
 	var content := VBoxContainer.new()
 	content.add_theme_constant_override("separation", 8)
 	panel.add_child(content)
-	content.add_child(_label("LIVE MARKET", 13, MUTED))
-	content.add_child(_label("All configured stocks. Compare the market and act from each row.", 12, MUTED))
+	var chart_header := HBoxContainer.new()
+	chart_header.add_theme_constant_override("separation", 8)
+	content.add_child(chart_header)
+	var chart_title := _label("LIVE MARKET CHART", 14, TEXT)
+	chart_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	chart_header.add_child(chart_title)
+	for range_option in [["ROUND", "ROUND"], ["5 ROUNDS", "FIVE"], ["ALL", "ALL"]]:
+		var range_button := Button.new()
+		range_button.text = range_option[0]
+		range_button.custom_minimum_size = Vector2(68, 26)
+		range_button.toggle_mode = true
+		range_button.pressed.connect(_on_chart_range_selected.bind(range_option[1]))
+		_style_range_button(range_button, range_option[1] == chart_range)
+		chart_range_buttons[range_option[1]] = range_button
+		chart_header.add_child(range_button)
 	chart = StockHistoryChart.new()
-	chart.custom_minimum_size.y = 155
-	chart.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	chart.custom_minimum_size.y = 270
+	chart.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	content.add_child(chart)
-	stock_list = VBoxContainer.new()
+	stock_list = GridContainer.new()
+	stock_list.columns = 3
 	stock_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	stock_list.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	stock_list.custom_minimum_size.y = 0
-	stock_list.add_theme_constant_override("h_separation", 6)
-	stock_list.add_theme_constant_override("v_separation", 8)
-	_build_stock_header()
+	stock_list.add_theme_constant_override("h_separation", 10)
+	stock_list.add_theme_constant_override("v_separation", 10)
 	content.add_child(stock_list)
 	trade_feedback = _label("Select a row to trade one share.", 12, MUTED)
 	trade_feedback.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(trade_feedback)
 	return panel
+
+func _style_range_button(button: Button, selected: bool) -> void:
+	var style := StyleBoxFlat.new()
+	style.bg_color = ACCENT if selected else Color("0d121b")
+	style.border_color = ACCENT if selected else BORDER
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(5)
+	button.add_theme_stylebox_override("normal", style)
+	button.add_theme_stylebox_override("pressed", style)
+	button.add_theme_stylebox_override("hover", style)
+	button.add_theme_color_override("font_color", BG if selected else MUTED)
+	button.add_theme_font_size_override("font_size", 10)
+
+func _on_chart_range_selected(new_range: String) -> void:
+	chart_range = new_range
+	for key in chart_range_buttons:
+		var button: Button = chart_range_buttons[key]
+		button.button_pressed = key == chart_range
+		_style_range_button(button, key == chart_range)
+	if session != null and session.game_state != null:
+		_update_market_surface(session.game_state)
 
 func _build_news_panel() -> Control:
 	var panel := _panel()
@@ -283,8 +323,7 @@ func _build_news_panel() -> Control:
 	news_tab.name = "NEWS"
 	news_tab.add_theme_constant_override("separation", 8)
 	secondary_tabs.add_child(news_tab)
-	news_tab.add_child(_label("LIVE NEWS", 14, MUTED))
-	news_tab.add_child(_label("Trades, forecasts, actions, and resolved stories.", 12, MUTED))
+	news_tab.add_child(_label("MARKET FEED", 14, TEXT))
 	news_filter = OptionButton.new()
 	news_filter.add_item("ALL EVENTS", 0)
 	news_filter.add_item("TRADES", 1)
@@ -313,16 +352,16 @@ func _panel() -> PanelContainer:
 	var panel := PanelContainer.new()
 	var style := StyleBoxFlat.new()
 	style.bg_color = PANEL
-	style.border_color = Color("2b3a4c")
+	style.border_color = BORDER
 	style.set_border_width_all(1)
 	style.corner_radius_top_left = 8
 	style.corner_radius_top_right = 8
 	style.corner_radius_bottom_left = 8
 	style.corner_radius_bottom_right = 8
-	style.content_margin_left = 16
-	style.content_margin_top = 14
-	style.content_margin_right = 16
-	style.content_margin_bottom = 14
+	style.content_margin_left = 14
+	style.content_margin_top = 12
+	style.content_margin_right = 14
+	style.content_margin_bottom = 12
 	panel.add_theme_stylebox_override("panel", style)
 	return panel
 
@@ -550,94 +589,137 @@ func _build_stock_rows(state: GameState) -> void:
 	for stock in state.stocks:
 		var row := PanelContainer.new()
 		var row_style := StyleBoxFlat.new()
-		row_style.bg_color = Color("151f2b")
-		row_style.border_color = StockData.color_for_index(state.stocks.find(stock)).darkened(0.25)
+		row_style.bg_color = PANEL_LIGHT
+		row_style.border_color = BORDER
 		row_style.set_border_width_all(1)
-		row_style.set_corner_radius_all(7)
-		row_style.content_margin_left = 10
-		row_style.content_margin_top = 8
-		row_style.content_margin_right = 10
-		row_style.content_margin_bottom = 8
+		row_style.set_corner_radius_all(8)
+		row_style.content_margin_left = 12
+		row_style.content_margin_top = 10
+		row_style.content_margin_right = 12
+		row_style.content_margin_bottom = 10
 		row.add_theme_stylebox_override("panel", row_style)
-		var row_content := HBoxContainer.new()
-		row_content.add_theme_constant_override("separation", 8)
-		row.add_child(row_content)
+		row.custom_minimum_size = Vector2(0, 142)
+		row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		stock_list.add_child(row)
+		var row_content := VBoxContainer.new()
+		row_content.add_theme_constant_override("separation", 7)
+		row.add_child(row_content)
+		var heading := HBoxContainer.new()
+		heading.add_theme_constant_override("separation", 7)
+		row_content.add_child(heading)
 		var symbol := _label(stock.symbol, 12, StockData.color_for_index(state.stocks.find(stock)))
-		symbol.custom_minimum_size.x = 100
-		symbol.text = "%s  %s" % [stock.symbol, stock.company_name]
+		symbol.text = stock.symbol
+		symbol.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		symbol.tooltip_text = stock.company_name
-		row_content.add_child(symbol)
+		heading.add_child(symbol)
+		var company := _label(stock.company_name, 9, MUTED)
+		company.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		heading.add_child(company)
+		var metrics := HBoxContainer.new()
+		metrics.add_theme_constant_override("separation", 8)
+		metrics.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row_content.add_child(metrics)
 		var price := _label("", 13, TEXT)
-		price.custom_minimum_size.x = 62
-		row_content.add_child(price)
+		price.custom_minimum_size.x = 76
+		metrics.add_child(price)
 		var change := _label("", 12, ACCENT)
-		change.custom_minimum_size.x = 58
-		row_content.add_child(change)
+		change.custom_minimum_size.x = 62
+		metrics.add_child(change)
 		var range := _label("", 11, ACCENT)
-		range.custom_minimum_size.x = 90
-		range.autowrap_mode = TextServer.AUTOWRAP_OFF
-		row_content.add_child(range)
+		range.custom_minimum_size.x = 112
+		range.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		metrics.add_child(range)
 		var position := _label("", 11, TEXT)
-		position.custom_minimum_size.x = 86
-		position.autowrap_mode = TextServer.AUTOWRAP_OFF
+		position.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		row_content.add_child(position)
 		var trade_actions := HBoxContainer.new()
-		trade_actions.add_theme_constant_override("separation", 3)
+		trade_actions.add_theme_constant_override("separation", 5)
+		trade_actions.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var buy := Button.new()
-		buy.text = "BUY"
+		buy.text = "+  Buy"
 		buy.tooltip_text = "Buy one share"
-		buy.custom_minimum_size = Vector2(50, 34)
+		buy.custom_minimum_size = Vector2(0, 28)
+		buy.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_style_action_button(buy, POSITIVE)
 		buy.pressed.connect(_quick_buy.bind(stock.symbol))
 		trade_actions.add_child(buy)
 		var sell := Button.new()
-		sell.text = "SELL"
+		sell.text = "-  Sell"
 		sell.tooltip_text = "Sell one share"
-		sell.custom_minimum_size = Vector2(50, 34)
+		sell.custom_minimum_size = Vector2(0, 28)
+		sell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_style_action_button(sell, NEGATIVE)
 		sell.pressed.connect(_quick_sell.bind(stock.symbol))
 		trade_actions.add_child(sell)
 		row_content.add_child(trade_actions)
 		var market_actions := HBoxContainer.new()
-		market_actions.add_theme_constant_override("separation", 3)
+		market_actions.add_theme_constant_override("separation", 4)
+		market_actions.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var pump := Button.new()
-		pump.text = "PUMP"
+		pump.text = "Pump"
 		pump.tooltip_text = "Spend £25.00 to lift this stock's live path."
-		pump.custom_minimum_size = Vector2(54, 34)
+		pump.custom_minimum_size = Vector2(0, 25)
+		pump.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_style_action_button(pump, ACCENT)
 		pump.pressed.connect(_quick_pump.bind(stock.symbol))
 		market_actions.add_child(pump)
 		var sabotage := Button.new()
-		sabotage.text = "SAB"
+		sabotage.text = "Sab"
 		sabotage.tooltip_text = "Spend £50.00 to add negative live pressure. Resolution risk remains."
-		sabotage.custom_minimum_size = Vector2(42, 34)
+		sabotage.custom_minimum_size = Vector2(0, 25)
+		sabotage.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_style_action_button(sabotage, NEGATIVE)
 		sabotage.pressed.connect(_quick_sabotage.bind(stock.symbol))
 		market_actions.add_child(sabotage)
 		var hype := Button.new()
-		hype.text = "HYPE"
+		hype.text = "Hype"
 		hype.tooltip_text = "Plant uncertain positive news for £75.00."
-		hype.custom_minimum_size = Vector2(54, 34)
+		hype.custom_minimum_size = Vector2(0, 25)
+		hype.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_style_action_button(hype, POSITIVE)
 		hype.pressed.connect(_quick_fake_news.bind(stock.symbol, 1))
 		market_actions.add_child(hype)
 		var fud := Button.new()
 		fud.text = "FUD"
 		fud.tooltip_text = "Plant uncertain negative news for £75.00."
-		fud.custom_minimum_size = Vector2(48, 34)
+		fud.custom_minimum_size = Vector2(0, 25)
+		fud.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_style_action_button(fud, NEGATIVE)
 		fud.pressed.connect(_quick_fake_news.bind(stock.symbol, -1))
 		market_actions.add_child(fud)
 		var call := Button.new()
 		call.text = "CALL"
-		call.tooltip_text = "Buy a one-round call at the current price. Premium is 8%."
-		call.custom_minimum_size = Vector2(62, 34)
+		call.tooltip_text = "Buy a one-round call at the current price. Premium depends on volatility."
+		call.custom_minimum_size = Vector2(0, 25)
+		call.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_style_action_button(call, ACCENT)
 		call.pressed.connect(_quick_call.bind(stock.symbol))
 		var put := Button.new()
 		put.text = "PUT"
-		put.tooltip_text = "Buy a one-round put at the current price. Premium is 8%."
-		put.custom_minimum_size = Vector2(55, 34)
+		put.tooltip_text = "Buy a one-round put at the current price. Premium depends on volatility."
+		put.custom_minimum_size = Vector2(0, 25)
+		put.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_style_action_button(put, NEGATIVE)
 		put.pressed.connect(_quick_put.bind(stock.symbol))
 		market_actions.add_child(call)
 		market_actions.add_child(put)
 		row_content.add_child(market_actions)
 		row_labels[stock.symbol] = {"price": price, "change": change, "range": range, "shares": null, "position": position, "buy": buy, "sell": sell, "pump": pump, "sabotage": sabotage, "hype": hype, "fud": fud, "call": call, "put": put}
 	_update_stock_rows(state)
+
+func _style_action_button(button: Button, color: Color) -> void:
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = Color(color, 0.09)
+	normal.border_color = Color(color, 0.34)
+	normal.set_border_width_all(1)
+	normal.set_corner_radius_all(5)
+	var hover := normal.duplicate()
+	hover.bg_color = Color(color, 0.2)
+	button.add_theme_stylebox_override("normal", normal)
+	button.add_theme_stylebox_override("hover", hover)
+	button.add_theme_stylebox_override("pressed", hover)
+	button.add_theme_color_override("font_color", color)
+	button.add_theme_font_size_override("font_size", 10)
 
 func _update_stock_rows(state: GameState) -> void:
 	for stock in state.stocks:
@@ -667,8 +749,9 @@ func _update_stock_rows(state: GameState) -> void:
 		labels["fud"].text = "FUD ON" if fake_news_active and stock.fake_news_direction < 0 else "FUD"
 		labels["fud"].tooltip_text = "ACTIVE: uncertain negative planted news." if fake_news_active and stock.fake_news_direction < 0 else "Plant uncertain negative news for £75.00."
 		labels["fud"].disabled = not can_trade or fake_news_active or state.action_on_cooldown("fake_news", stock.symbol) or state.cash_pence < GameState.FAKE_NEWS_COST_PENCE
-		labels["call"].disabled = not can_trade or state.cash_pence < maxi(100, roundi(float(stock.current_price_pence) * 0.08))
-		labels["put"].disabled = not can_trade or state.cash_pence < maxi(100, roundi(float(stock.current_price_pence) * 0.08))
+		var option_premium := TradeService.option_premium_pence(stock)
+		labels["call"].disabled = not can_trade or state.cash_pence < option_premium
+		labels["put"].disabled = not can_trade or state.cash_pence < option_premium
 
 func _update_market_surface(state: GameState) -> void:
 	var chart_series: Array[Dictionary] = []
@@ -676,7 +759,7 @@ func _update_market_surface(state: GameState) -> void:
 		var chart_stock: StockData = state.stocks[index]
 		chart_series.append({
 			"symbol": chart_stock.symbol,
-			"values": _graph_history_percentage(chart_stock),
+			"values": _chart_prices(chart_stock),
 			"color": StockData.color_for_index(index),
 		})
 	chart.set_series(chart_series)
@@ -687,12 +770,23 @@ func _round_change(stock: StockData) -> float:
 		return 0.0
 	return (float(stock.current_price_pence - stock.round_open_price_pence) / float(stock.round_open_price_pence)) * 100.0
 
-func _graph_history_percentage(stock: StockData) -> Array[float]:
+func _chart_prices(stock: StockData) -> Array[float]:
+	var prices: Array[int] = []
+	if chart_range == "ROUND":
+		prices = stock.live_price_history_pence.duplicate()
+	else:
+		var history_start := 0
+		if chart_range == "FIVE":
+			history_start = maxi(0, stock.round_history_pence.size() - 5)
+		for index in range(history_start, stock.round_history_pence.size()):
+			prices.append_array(stock.round_history_pence[index])
+		prices.append_array(stock.live_price_history_pence)
 	var values: Array[float] = []
-	if stock.round_open_price_pence <= 0:
+	if prices.is_empty() or prices[0] <= 0:
 		return values
-	for price_pence in stock.graph_history_pence():
-		values.append((float(price_pence - stock.round_open_price_pence) / float(stock.round_open_price_pence)) * 100.0)
+	var opening_price := float(prices[0])
+	for price_pence in prices:
+		values.append((float(price_pence) - opening_price) / opening_price * 100.0)
 	return values
 
 func _update_news_feed(state: GameState) -> void:
@@ -878,7 +972,7 @@ func _show_debrief(day: int, resolutions: Array[Dictionary]) -> void:
 	upper.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	upper.size_flags_stretch_ratio = 2.0
 	upper.custom_minimum_size.y = 180
-	var chart_panel := _build_debrief_chart()
+	var chart_panel := _build_debrief_chart(resolutions)
 	chart_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	chart_panel.size_flags_stretch_ratio = 1.0
 	upper.add_child(chart_panel)
@@ -887,24 +981,14 @@ func _show_debrief(day: int, resolutions: Array[Dictionary]) -> void:
 	details_panel.size_flags_stretch_ratio = 1.0
 	upper.add_child(details_panel)
 	content.add_child(upper)
-	var lower := _build_debrief_news_panel(resolutions)
-	lower.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	lower.custom_minimum_size.y = 112
-	content.add_child(lower)
-	var action_layer := Control.new()
-	action_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	action_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	debrief_layer.add_child(action_layer)
+	var action_bar := HBoxContainer.new()
+	action_bar.custom_minimum_size.y = 42
+	action_bar.alignment = BoxContainer.ALIGNMENT_END
+	content.add_child(action_bar)
 	if session.game_state.phase == GameState.Phase.DEBRIEF:
 		var next_day := _forward_button("NEXT DAY", Vector2(150, 38))
 		next_day.pressed.connect(_continue_after_debrief)
-		next_day.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-		next_day.offset_left = -178
-		next_day.offset_top = -58
-		next_day.offset_right = -28
-		next_day.offset_bottom = -20
-		next_day.mouse_filter = Control.MOUSE_FILTER_STOP
-		action_layer.add_child(next_day)
+		action_bar.add_child(next_day)
 
 func _build_debrief_news_panel(resolutions: Array[Dictionary]) -> Control:
 	var panel := _panel()
@@ -1143,7 +1227,7 @@ func _restart_run() -> void:
 		child.free()
 	session.start_run()
 
-func _build_debrief_chart() -> Control:
+func _build_debrief_chart(resolutions: Array[Dictionary]) -> Control:
 	var panel := _panel()
 	var content := VBoxContainer.new()
 	debrief_chart_tabs = HBoxContainer.new()
@@ -1161,6 +1245,10 @@ func _build_debrief_chart() -> Control:
 	debrief_chart.custom_minimum_size = Vector2(0, 190)
 	debrief_chart.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	content.add_child(debrief_chart)
+	var news_panel := _build_debrief_news_panel(resolutions)
+	news_panel.custom_minimum_size.y = 112
+	news_panel.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	content.add_child(news_panel)
 	panel.add_child(content)
 	_show_debrief_chart(false)
 	return panel

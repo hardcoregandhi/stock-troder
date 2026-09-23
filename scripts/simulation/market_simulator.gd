@@ -12,6 +12,9 @@ const FAKE_NEWS_NO_EFFECT_CHANCE: float = 0.25
 const FAKE_NEWS_BACKFIRE_PERCENT: float = 0.04
 const LIVE_NOISE_VOLATILITY_FACTOR: float = 0.35
 const MAX_LIVE_NOISE: float = 0.04
+const HISTORY_ROUNDS: int = 3
+const HISTORY_RESPONSE_WEIGHT: float = 0.18
+const MAX_HISTORY_INFLUENCE: float = 0.025
 
 var random: RandomNumberGenerator = RandomNumberGenerator.new()
 var seed: int
@@ -32,7 +35,8 @@ func prepare_day(state: GameState) -> Array[Dictionary]:
 		var event := _choose_event(stock)
 		var news_impact: float = float(event.get("impact", 0.0))
 		var random_shock := random.randf_range(-stock.volatility, stock.volatility)
-		var projection := stock.trend + news_impact + random_shock
+		var historical_weight := stock.recent_performance_weight(HISTORY_ROUNDS, HISTORY_RESPONSE_WEIGHT, MAX_HISTORY_INFLUENCE)
+		var projection := stock.trend + news_impact + random_shock + historical_weight
 		var forecast_noise := stock.volatility * 0.35
 		var low := projection - forecast_noise
 		var high := projection + forecast_noise

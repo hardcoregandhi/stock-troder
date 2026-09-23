@@ -116,6 +116,18 @@ func test_brief_precedes_each_trading_round() -> void:
 	assert_true(session.start_trading_round())
 	assert_eq(session.game_state.phase, GAME_STATE.Phase.TRADING)
 
+func test_next_round_opens_at_previous_close() -> void:
+	var session: TradingSession = _new_session()
+	session.start_run(32, 2)
+	assert_true(session.start_trading_round())
+	var stock := session.game_state.get_stock("AUR")
+	stock.current_price_pence = 5_432
+	session._on_day_timer_timed_out()
+	var closing_price := stock.current_price_pence
+	assert_true(session.continue_to_next_day())
+	assert_eq(stock.current_price_pence, closing_price)
+	assert_eq(stock.round_open_price_pence, closing_price)
+
 func test_next_day_resets_pump_usage() -> void:
 	var session: TradingSession = _new_session()
 	session.start_run(15, 2)

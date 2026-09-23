@@ -309,6 +309,7 @@ func state_snapshot() -> Dictionary:
 			"fake_news_used": game_state.has_planted_fake_news(stock.symbol),
 			"fake_news_direction": stock.fake_news_direction,
 			"fake_news_active": stock.fake_news_active,
+			"round_history_pence": stock.round_history_pence.duplicate(true),
 		})
 	return {
 		"day": game_state.current_day,
@@ -359,6 +360,12 @@ func apply_network_snapshot(snapshot: Dictionary) -> void:
 		stock.sabotage_live_pressure = float(record.get("sabotage_live_pressure", 0.0))
 		stock.fake_news_direction = int(record.get("fake_news_direction", 0))
 		stock.fake_news_active = bool(record.get("fake_news_active", false))
+		stock.round_history_pence.clear()
+		for round_prices in record.get("round_history_pence", []):
+			var typed_prices: Array[int] = []
+			for price_pence in round_prices:
+				typed_prices.append(int(price_pence))
+			stock.round_history_pence.append(typed_prices)
 	network_rankings.clear()
 	for player in snapshot.get("players", []):
 		network_rankings.append(player.duplicate(true))

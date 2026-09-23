@@ -115,4 +115,3 @@ func portfolio_value_pence() -> int:
 
 func total_return_pence() -> int:
 	return portfolio_value_pence() - starting_cash_pence
-

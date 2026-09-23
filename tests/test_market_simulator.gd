@@ -43,6 +43,34 @@ func test_live_noise_is_bounded_and_more_visible_during_round() -> void:
 			changed_stock_count += 1
 	assert_gt(changed_stock_count, 0)
 
+func test_resolution_archives_full_round_price_path() -> void:
+	var state = GAME_STATE.new(303, 2)
+	var simulator = MARKET_SIMULATOR.new(303)
+	simulator.prepare_day(state)
+	simulator.start_trading(state)
+	simulator.update_live_prices(state, 0.5)
+	var stock = state.get_stock("AUR")
+	var live_sample_count := stock.live_price_history_pence.size()
+	simulator.resolve_day(state)
+	assert_eq(stock.round_history_pence.size(), 1)
+	assert_eq(stock.round_history_pence[0].size(), live_sample_count + 1)
+	assert_eq(stock.round_history_pence[0][0], stock.round_open_price_pence)
+	assert_eq(stock.round_history_pence[0][-1], stock.current_price_pence)
+
+func test_recent_history_adds_bounded_weight_to_projection() -> void:
+	var history_state = GAME_STATE.new(304, 2)
+	var baseline_state = GAME_STATE.new(304, 2)
+	var history_simulator = MARKET_SIMULATOR.new(304)
+	var baseline_simulator = MARKET_SIMULATOR.new(304)
+	var history_stock = history_state.get_stock("AUR")
+	history_stock.price_history_pence.append(6_000)
+	var history_projections := history_simulator.prepare_day(history_state)
+	var baseline_projections := baseline_simulator.prepare_day(baseline_state)
+	var history_change := float(history_projections[0]["projection_change"])
+	var baseline_change := float(baseline_projections[0]["projection_change"])
+	assert_gt(history_change, baseline_change)
+	assert_true(history_change - baseline_change <= MARKET_SIMULATOR.MAX_HISTORY_INFLUENCE)
+
 func test_resolved_prices_respect_price_floor_and_append_history() -> void:
 	var state = GAME_STATE.new(77, 1)
 	var simulator = MARKET_SIMULATOR.new(77)

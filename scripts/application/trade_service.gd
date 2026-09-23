@@ -96,6 +96,10 @@ func buy_call(state: GameState, symbol: String, quantity: int = 1) -> Dictionary
 func buy_put(state: GameState, symbol: String, quantity: int = 1) -> Dictionary:
 	return _buy_option(state, symbol, quantity, OptionContract.PUT)
 
+static func option_premium_pence(stock: StockData) -> int:
+	var premium_rate := clampf(stock.volatility * 0.5 + 0.02, 0.03, 0.07)
+	return maxi(100, roundi(float(stock.current_price_pence) * premium_rate))
+
 func _buy_option(state: GameState, symbol: String, quantity: int, option_type: String) -> Dictionary:
 	var stock := state.get_stock(symbol)
 	if state.phase != GameState.Phase.TRADING:
@@ -104,7 +108,7 @@ func _buy_option(state: GameState, symbol: String, quantity: int, option_type: S
 		return _option_result(state, false, "Unknown stock.", symbol, option_type, 0, 0, 0, quantity)
 	if quantity <= 0:
 		return _option_result(state, false, "Quantity must be positive.", symbol, option_type, 0, 0, 0, quantity)
-	var premium_per_contract := maxi(100, roundi(float(stock.current_price_pence) * 0.08))
+	var premium_per_contract := option_premium_pence(stock)
 	var total_premium := premium_per_contract * quantity
 	if total_premium > state.cash_pence:
 		return _option_result(state, false, "Not enough cash for %s." % option_type, symbol, option_type, 0, premium_per_contract, 0, quantity)
