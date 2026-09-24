@@ -71,9 +71,16 @@ class ResponsiveShell extends Control:
 class StockHistoryChart extends Control:
 	var series: Array[Dictionary] = []
 	var grid_color := Color("2b4655")
+	var start_label := "ROUND OPEN"
+	var end_label := "NOW"
 
 	func set_series(new_series: Array[Dictionary]) -> void:
 		series = new_series.duplicate(true)
+		queue_redraw()
+
+	func set_axis_labels(new_start_label: String, new_end_label: String) -> void:
+		start_label = new_start_label
+		end_label = new_end_label
 		queue_redraw()
 
 	func _draw() -> void:
@@ -104,8 +111,8 @@ class StockHistoryChart extends Control:
 			var x := area.position.x + area.size.x * float(index) / 4.0
 			draw_line(Vector2(x, area.position.y), Vector2(x, area.end.y), grid_color, 1.0)
 		draw_line(Vector2(area.position.x, area.end.y), Vector2(area.end.x, area.end.y), MUTED, 1.0)
-		draw_string(ThemeDB.fallback_font, Vector2(area.position.x, size.y - 10.0), "ROUND OPEN", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 10, MUTED)
-		draw_string(ThemeDB.fallback_font, Vector2(area.end.x - 24.0, size.y - 10.0), "NOW", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 10, MUTED)
+		draw_string(ThemeDB.fallback_font, Vector2(area.position.x, size.y - 10.0), start_label, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 10, MUTED)
+		draw_string(ThemeDB.fallback_font, Vector2(area.end.x - 60.0, size.y - 10.0), end_label, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 10, MUTED)
 		draw_string(ThemeDB.fallback_font, Vector2(area.position.x, 16.0), "% CHANGE FROM RANGE START", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 10, MUTED)
 		for item in drawable_series:
 			var values: Array = item["values"]
@@ -689,14 +696,14 @@ func _build_stock_rows(state: GameState) -> void:
 		market_actions.add_child(fud)
 		var call := Button.new()
 		call.text = "CALL"
-		call.tooltip_text = "Buy a one-round call at the current price. Premium depends on volatility."
+		call.tooltip_text = "Buy a one-round call at the current price. Premium reflects volatility and time remaining."
 		call.custom_minimum_size = Vector2(0, 25)
 		call.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		_style_action_button(call, ACCENT)
 		call.pressed.connect(_quick_call.bind(stock.symbol))
 		var put := Button.new()
 		put.text = "PUT"
-		put.tooltip_text = "Buy a one-round put at the current price. Premium depends on volatility."
+		put.tooltip_text = "Buy a one-round put at the current price. Premium reflects volatility and time remaining."
 		put.custom_minimum_size = Vector2(0, 25)
 		put.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		_style_action_button(put, NEGATIVE)
@@ -749,7 +756,7 @@ func _update_stock_rows(state: GameState) -> void:
 		labels["fud"].text = "FUD ON" if fake_news_active and stock.fake_news_direction < 0 else "FUD"
 		labels["fud"].tooltip_text = "ACTIVE: uncertain negative planted news." if fake_news_active and stock.fake_news_direction < 0 else "Plant uncertain negative news for £75.00."
 		labels["fud"].disabled = not can_trade or fake_news_active or state.action_on_cooldown("fake_news", stock.symbol) or state.cash_pence < GameState.FAKE_NEWS_COST_PENCE
-		var option_premium := TradeService.option_premium_pence(stock)
+		var option_premium := TradeService.option_premium_pence(stock, session.option_time_remaining_ratio())
 		labels["call"].disabled = not can_trade or state.cash_pence < option_premium
 		labels["put"].disabled = not can_trade or state.cash_pence < option_premium
 
@@ -981,6 +988,19 @@ func _show_debrief(day: int, resolutions: Array[Dictionary]) -> void:
 	details_panel.size_flags_stretch_ratio = 1.0
 	upper.add_child(details_panel)
 	content.add_child(upper)
+	var lower := HBoxContainer.new()
+	lower.add_theme_constant_override("separation", 10)
+	lower.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	lower.size_flags_stretch_ratio = 1.0
+	var news_panel := _build_debrief_news_panel(resolutions)
+	news_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	news_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	lower.add_child(news_panel)
+	var rankings_panel := _build_rankings_panel(_display_rankings())
+	rankings_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rankings_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	lower.add_child(rankings_panel)
+	content.add_child(lower)
 	var action_bar := HBoxContainer.new()
 	action_bar.custom_minimum_size.y = 42
 	action_bar.alignment = BoxContainer.ALIGNMENT_END
@@ -1073,7 +1093,6 @@ func _build_debrief_details_panel(resolutions: Array[Dictionary]) -> Control:
 		]:
 			result_grid.add_child(value)
 	content.add_child(result_grid)
-	content.add_child(_build_rankings_panel(_display_rankings()))
 	return panel
 
 func _action_marker_text(resolution: Dictionary) -> String:
@@ -1127,7 +1146,20 @@ func _show_brief(day: int) -> void:
 	title.custom_minimum_size.y = 28
 	content.add_child(title)
 	content.add_child(_label("Review the next market stories, your holdings, and the match before trading starts.", 12, MUTED))
-	content.add_child(_next_day_outlook())
+	var upper := HBoxContainer.new()
+	upper.add_theme_constant_override("separation", 10)
+	upper.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	upper.size_flags_stretch_ratio = 2.0
+	upper.custom_minimum_size.y = 260
+	var chart_panel := _build_brief_chart()
+	chart_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	chart_panel.size_flags_stretch_ratio = 1.0
+	upper.add_child(chart_panel)
+	var outlook_panel := _next_day_outlook()
+	outlook_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	outlook_panel.size_flags_stretch_ratio = 1.0
+	upper.add_child(outlook_panel)
+	content.add_child(upper)
 	content.add_child(_label("YOUR HOLDINGS  |  CASH %s  |  %s" % [_format_pence(session.game_state.cash_pence), _holdings_text(session.game_state)], 13, TEXT))
 	content.add_child(_build_rankings_panel(_display_rankings()))
 	var action_bar := HBoxContainer.new()
@@ -1230,6 +1262,7 @@ func _restart_run() -> void:
 func _build_debrief_chart(resolutions: Array[Dictionary]) -> Control:
 	var panel := _panel()
 	var content := VBoxContainer.new()
+	content.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	debrief_chart_tabs = HBoxContainer.new()
 	debrief_chart_tabs.add_theme_constant_override("separation", 8)
 	var day_tab := Button.new()
@@ -1244,14 +1277,38 @@ func _build_debrief_chart(resolutions: Array[Dictionary]) -> Control:
 	debrief_chart = StockHistoryChart.new()
 	debrief_chart.custom_minimum_size = Vector2(0, 190)
 	debrief_chart.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	debrief_chart.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	content.add_child(debrief_chart)
-	var news_panel := _build_debrief_news_panel(resolutions)
-	news_panel.custom_minimum_size.y = 112
-	news_panel.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	content.add_child(news_panel)
 	panel.add_child(content)
 	_show_debrief_chart(false)
 	return panel
+
+func _build_brief_chart() -> Control:
+	var panel := _panel()
+	var content := VBoxContainer.new()
+	content.add_theme_constant_override("separation", 5)
+	content.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	content.add_child(_label("PROJECTED PERFORMANCE", 12, MUTED))
+	var projection_chart := StockHistoryChart.new()
+	projection_chart.custom_minimum_size = Vector2(0, 190)
+	projection_chart.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	projection_chart.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	projection_chart.set_axis_labels("CURRENT", "PROJECTED")
+	projection_chart.set_series(_projected_graph_series())
+	content.add_child(projection_chart)
+	panel.add_child(content)
+	return panel
+
+func _projected_graph_series() -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for index in session.game_state.stocks.size():
+		var stock: StockData = session.game_state.stocks[index]
+		result.append({
+			"symbol": stock.symbol,
+			"values": [0.0, stock.projection_change * 100.0],
+			"color": StockData.color_for_index(index),
+		})
+	return result
 
 func _show_debrief_chart(game_so_far: bool) -> void:
 	if debrief_chart == null:
@@ -1292,15 +1349,13 @@ func _next_day_outlook() -> Control:
 	var content := VBoxContainer.new()
 	content.add_child(_label("NEXT DAY STOCK STORIES / PROJECTIONS", 12, MUTED))
 	var grid := GridContainer.new()
-	grid.columns = 5
+	grid.columns = 3
 	grid.add_theme_constant_override("h_separation", 10)
 	grid.add_theme_constant_override("v_separation", 4)
 	for header in [
 		_column_label("STOCK", 70),
 		_column_label("STORY", 0),
 		_column_label("FORECAST", 150),
-		_column_label("HYPE", 60),
-		_column_label("FUD", 60),
 	]:
 		header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		grid.add_child(header)
@@ -1317,20 +1372,6 @@ func _next_day_outlook() -> Control:
 		var forecast := _label("%+.1f%%  |  %+.1f%% to %+.1f%%" % [stock.projection_change * 100.0, stock.projection_low * 100.0, stock.projection_high * 100.0], 11, POSITIVE if stock.projection_change >= 0.0 else NEGATIVE)
 		forecast.custom_minimum_size.x = 150
 		grid.add_child(forecast)
-		var fake_positive := Button.new()
-		fake_positive.text = "HYPE"
-		fake_positive.custom_minimum_size.x = 60
-		fake_positive.tooltip_text = "Available during trading: plant uncertain positive news for £75.00."
-		fake_positive.pressed.connect(_quick_fake_news.bind(stock.symbol, 1))
-		fake_positive.disabled = true
-		grid.add_child(fake_positive)
-		var fake_negative := Button.new()
-		fake_negative.text = "FUD"
-		fake_negative.custom_minimum_size.x = 60
-		fake_negative.tooltip_text = "Available during trading: plant uncertain negative news for £75.00."
-		fake_negative.pressed.connect(_quick_fake_news.bind(stock.symbol, -1))
-		fake_negative.disabled = true
-		grid.add_child(fake_negative)
 	content.add_child(grid)
 	panel.add_child(content)
 	return panel
