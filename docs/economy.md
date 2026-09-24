@@ -229,3 +229,76 @@ Do not ask whether a price is realistic in isolation. Ask whether the price crea
 - Is another action better in a different state?
 
 The automated balance method for answering these questions is in [economy-balance-plan.md](economy-balance-plan.md).
+
+## 11. Long-Term Objectives and Set Collection
+
+Short trading rounds need a second layer of decisions if the player is to make a plan across the full run. The player should collect visible items and combine them to complete objectives, similar to a Eurogame portfolio or tableau.
+
+### Items
+
+Items must be concrete game state, not hidden intentions. Possible items include:
+
+- Stock positions with tags such as `ENERGY`, `GROWTH`, `DEFENSIVE`, `VOLATILE`, and `CATALYST`.
+- Research items that give a visible information or trading benefit.
+- Partnership or influence items created by a successful action.
+- Recorded achievements such as a profitable exit or a position held for several days.
+
+### Objectives
+
+Objectives use combinations of items and verified actions. Examples:
+
+- `BALANCED PORTFOLIO`: hold one defensive, one growth, and one volatile stock.
+- `ENERGY EXPANSION`: hold two energy items and one partnership item.
+- `RESEARCH-LED INVESTOR`: acquire three research items and complete two profitable trades.
+- `CATALYST SPECIALIST`: hold two catalyst positions through their visible catalyst days.
+
+The game must score observable state and action history. It must not score whether the player intended to manage risk or chose the correct belief.
+
+### Visibility and fairness
+
+An objective must show its requirements, current progress, deadline, and reward. An objective based on a rare event only becomes active after that event is clearly shown to the player. A hidden correction or random news roll must never silently decide whether a core objective succeeds.
+
+Use measurable rules such as:
+
+- Hold three different stocks at the same time.
+- Keep at least £300 in cash at the start of Day 6.
+- Complete two buy-to-sell cycles with a positive return.
+- Sell at least one share within ten seconds of a visible correction warning.
+
+Avoid vague rules such as `react correctly`, `make a good decision`, or `profit from lucky news`.
+
+### Combination scoring
+
+Completed objectives can unlock a larger combination bonus:
+
+```text
+BALANCED PORTFOLIO + RESEARCH-LED INVESTOR
+= INFORMED DIVERSIFICATION bonus
+```
+
+The player should have more objectives available than they can easily complete. This creates a real choice between concentration, diversification, cash reserves, and opportunistic trading.
+
+### Reward scale
+
+Objective rewards must be large enough to justify their opportunity cost. For a ten-day run beginning with £1,000, initial test ranges are:
+
+- Simple objective: £75-£125 equivalent.
+- Difficult objective: £150-£225 equivalent.
+- Combination bonus: £100-£200 equivalent.
+- Total objective contribution for an excellent run: roughly £300-£450 equivalent.
+
+These are test ranges, not final values. Objective rewards should improve a strong plan without making normal trading irrelevant. The balance target is that a strong trading run remains viable, while excellent objective planning adds a meaningful advantage.
+
+For clarity, the game may use one unified final score:
+
+```text
+final score = portfolio value converted to points
+              + completed objective points
+              + combination bonus points
+```
+
+Do not compare a small number such as `36 points` directly with a £1,000 bankroll unless the conversion is explicit. Every reward must be visible before the player commits to its requirements.
+
+### Open balance question
+
+The current project does not yet define what a good, average, or bad run looks like across normal trading, Pump, HYPE/FUD, Sabotage, and calls or puts. Do not finalize objective rewards or declare one strategy dominant until representative seeded runs have been sampled and their outcome distributions recorded. See [economy-balance-plan.md](economy-balance-plan.md) for the required experiment.

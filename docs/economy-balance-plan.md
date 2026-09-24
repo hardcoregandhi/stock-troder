@@ -226,3 +226,55 @@ Use automated sampling first, then human playtesting on a small set of promising
 - Stock volatility range.
 
 The first harness should focus on Pump and ordinary trading. Planting news and sabotage should be added to the harness only after their rules are specified.
+
+## 14. Baseline Run Study Before Objective Rewards
+
+Before adding or tuning long-term objectives, establish the current run distribution. We do not yet know what a good, average, or bad ten-day run means in practice.
+
+Run the same seeded market through representative strategies. Use enough seeds to show a distribution, not one memorable run. At minimum, sample:
+
+- Buy and sell only, following positive projections.
+- Buy and sell only, with a cash reserve.
+- Buy and sell with diversification.
+- HYPE/FUD used only when the forecast and live movement agree.
+- Pump used on every available target.
+- Pump used only on strong signals.
+- Normal trading combined with Pump and HYPE/FUD.
+- Calls and puts used rarely after a strong signal.
+- Calls and puts used aggressively.
+- A conservative mixed strategy that avoids options.
+
+For every run, record:
+
+- Final liquidated cash and return percentage.
+- Median, mean, 10th percentile, and 90th percentile result by strategy.
+- Lowest cash during the run.
+- Largest single-day gain and loss.
+- Number of trades and action costs.
+- Options purchased, premium paid, payout, and expiry loss.
+- Pump, Sabotage, and HYPE/FUD usage and outcome.
+- Days spent holding each stock.
+- Whether a run recovered after its worst day.
+
+Compare strategies on paired seeds. This will show whether options currently provide a meaningful strategic choice or simply dominate normal buying and selling because their upside is too high. It will also show whether Pump and HYPE/FUD are useful in selected states or profitable by default.
+
+### Initial run labels
+
+Use provisional labels until playtest data exists:
+
+- `bad run`: below starting cash or unable to recover from a loss.
+- `ordinary run`: near the middle of the normal-trading distribution.
+- `good run`: clearly above the normal-trading median without relying on one extreme outcome.
+- `exceptional run`: high result with a repeatable decision pattern, not only a lucky option payout.
+
+Do not turn these provisional labels into player-facing grades yet. First check the distributions and run human playtests. A good run should be defined by repeatable choices and acceptable downside, not only by the highest final cash.
+
+### Decision gate
+
+Objective rewards should remain provisional until:
+
+1. The baseline strategy distributions are recorded.
+2. Options are compared with normal trading on paired seeds.
+3. Pump and HYPE/FUD are tested both with and without corrections or failure outcomes.
+4. Human players can explain why a run was good or bad.
+5. The reward budget is tested against the strongest existing strategy.
