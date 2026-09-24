@@ -27,6 +27,69 @@ func test_host_keeps_separate_portfolios_for_each_peer() -> void:
 	assert_eq(session.game_state.holdings["AUR"], 0)
 	assert_eq(remote_state.holdings["AUR"], 2)
 
+func test_disconnect_rechecks_readiness_for_current_phase() -> void:
+	var session: TradingSession = TRADING_SESSION.new()
+	track(session)
+	session._ready()
+	session.network_mode = true
+	session.network_is_host = true
+	session.network_local_player_id = 1
+	session.game_state = GAME_STATE.new(42, 3)
+	session.market_simulator = MarketSimulator.new(42)
+	session.trade_service = TradeService.new()
+	session.game_state.phase = GameState.Phase.BRIEF
+	session.network_player_states = {1: session.game_state, 2: GAME_STATE.new(42, 3)}
+	session.network_ready_players = {1: true, 2: false}
+
+	session.remove_network_player(2)
+	assert_eq(session.game_state.phase, GameState.Phase.TRADING)
+
+	session.game_state.phase = GameState.Phase.DEBRIEF
+	session.network_player_states = {1: session.game_state, 3: GAME_STATE.new(42, 3)}
+	session.network_ready_players = {1: true, 3: false}
+	session.remove_network_player(3)
+	assert_eq(session.game_state.phase, GameState.Phase.BRIEF)
+	assert_eq(session.game_state.current_day, 2)
+
+func test_client_snapshot_restores_round_chart_state() -> void:
+	var host: TradingSession = TRADING_SESSION.new()
+	track(host)
+	host._ready()
+	host.network_mode = true
+	host.network_is_host = true
+	host.network_local_player_id = 1
+	host.game_state = GAME_STATE.new(42, 2)
+	host.market_simulator = MarketSimulator.new(42)
+	host.trade_service = TradeService.new()
+	host.game_state.phase = GameState.Phase.TRADING
+	var host_stock := host.game_state.get_stock("AUR")
+	host_stock.round_open_price_pence = 5_100
+	host_stock.current_price_pence = 5_250
+	host_stock.live_price_history_pence = [5_100, 5_180, 5_250]
+	host.game_state.mark_pumped("AUR")
+	host_stock.activate_pump(0.04)
+
+	var client: TradingSession = TRADING_SESSION.new()
+	track(client)
+	client._ready()
+	client.network_mode = true
+	client.network_is_host = false
+	client.network_local_player_id = 2
+	client.game_state = GAME_STATE.new(0, 2)
+	client.apply_network_snapshot({
+		"market": host._network_market_snapshot(),
+		"portfolio": {"cash_pence": 100_000, "holdings": {}},
+		"players": [],
+	})
+
+	var client_stock := client.game_state.get_stock("AUR")
+	assert_eq(client_stock.current_price_pence, 5_250)
+	assert_eq(client_stock.round_open_price_pence, 5_100)
+	assert_eq(client_stock.live_price_history_pence, [5_100, 5_180, 5_250])
+	assert_true(client.game_state.has_pumped("AUR"))
+	assert_true(client_stock.pump_active)
+	assert_eq(client_stock.pump_live_boost, 0.04)
+
 func test_host_validates_remote_intent_against_remote_state() -> void:
 	var session: TradingSession = TRADING_SESSION.new()
 	track(session)

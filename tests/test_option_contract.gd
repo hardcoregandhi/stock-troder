@@ -28,12 +28,21 @@ func test_option_purchase_charges_volatility_based_premium() -> void:
 	assert_eq(state.cash_pence, state.starting_cash_pence - 313)
 	assert_eq(state.option_positions.size(), 1)
 
+func test_late_option_premium_reflects_time_remaining() -> void:
+	var state: GameState = GAME_STATE.new(42, 2)
+	var stock: StockData = state.get_stock("AUR")
+	var opening_premium := TRADE_SERVICE.option_premium_pence(stock, 1.0)
+	var late_premium := TRADE_SERVICE.option_premium_pence(stock, 0.0)
+	assert_eq(opening_premium, 313)
+	assert_true(late_premium < opening_premium)
+	assert_eq(late_premium, 100)
+
 func test_option_purchase_requires_trading_and_cash() -> void:
 	var state: GameState = GAME_STATE.new(42, 2)
 	var service: TradeService = TRADE_SERVICE.new()
 	assert_false(service.buy_put(state, "AUR")["success"])
 	state.phase = GAME_STATE.Phase.TRADING
-	state.cash_pence = 399
+	state.cash_pence = 300
 	assert_false(service.buy_put(state, "AUR")["success"])
 	assert_eq(state.option_positions.size(), 0)
 

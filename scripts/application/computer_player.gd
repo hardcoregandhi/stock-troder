@@ -17,27 +17,27 @@ func _init(new_player_id: int, new_name: String, new_profile: String, seed: int)
 	random.seed = seed
 	decision_interval = 1.0 + random.randf() * 0.8
 
-func tick(delta: float, state: GameState, trade_service: TradeService) -> Dictionary:
+func tick(delta: float, state: GameState, trade_service: TradeService, time_remaining_ratio: float = 1.0) -> Dictionary:
 	if state.phase != GameState.Phase.TRADING:
 		return {}
 	decision_elapsed += delta
 	if decision_elapsed < decision_interval:
 		return {}
 	decision_elapsed = 0.0
-	return _make_decision(state, trade_service)
+	return _make_decision(state, trade_service, time_remaining_ratio)
 
-func _make_decision(state: GameState, trade_service: TradeService) -> Dictionary:
+func _make_decision(state: GameState, trade_service: TradeService, time_remaining_ratio: float) -> Dictionary:
 	var stock := _target_stock(state)
 	if stock == null:
 		return {}
 	var manipulation_roll := random.randf()
 	if risk_profile == "AGGRESSIVE" and random.randf() < 0.12:
 		if stock.projection_change >= 0.03:
-			var call_result := trade_service.buy_call(state, stock.symbol)
+			var call_result := trade_service.buy_call(state, stock.symbol, 1, time_remaining_ratio)
 			if bool(call_result.get("success", false)):
 				return call_result
 		elif stock.projection_change <= -0.03:
-			var put_result := trade_service.buy_put(state, stock.symbol)
+			var put_result := trade_service.buy_put(state, stock.symbol, 1, time_remaining_ratio)
 			if bool(put_result.get("success", false)):
 				return put_result
 	if manipulation_roll < _manipulation_chance():

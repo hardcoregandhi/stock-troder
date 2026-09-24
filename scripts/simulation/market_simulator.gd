@@ -15,6 +15,7 @@ const MAX_LIVE_NOISE: float = 0.04
 const HISTORY_ROUNDS: int = 3
 const HISTORY_RESPONSE_WEIGHT: float = 0.18
 const MAX_HISTORY_INFLUENCE: float = 0.025
+const INTRADAY_NEWS_COOLDOWN_PROGRESS: float = 1.0 / 6.0
 
 var random: RandomNumberGenerator = RandomNumberGenerator.new()
 var seed: int
@@ -58,7 +59,7 @@ func update_live_prices(state: GameState, progress: float) -> Array[Dictionary]:
 	last_intraday_events.clear()
 	var clamped_progress := clampf(progress, 0.0, 1.0)
 	for stock in state.stocks:
-		var intraday_event := _maybe_intraday_event(stock)
+		var intraday_event := _maybe_intraday_event(stock, clamped_progress)
 		if not intraday_event.is_empty():
 			last_intraday_events.append(intraday_event)
 		var target_price := maxi(PRICE_FLOOR_PENCE, stock.projected_price_pence)
@@ -80,9 +81,9 @@ func update_live_prices(state: GameState, progress: float) -> Array[Dictionary]:
 		})
 	return updates
 
-func _maybe_intraday_event(stock: StockData) -> Dictionary:
-	var cooldown_until := int(intraday_news_cooldowns.get(stock.symbol, 0))
-	if cooldown_until > Time.get_ticks_msec() or random.randf() > 0.012 or stock.news_events.is_empty():
+func _maybe_intraday_event(stock: StockData, progress: float) -> Dictionary:
+	var cooldown_until := float(intraday_news_cooldowns.get(stock.symbol, 0.0))
+	if cooldown_until > progress or random.randf() > 0.012 or stock.news_events.is_empty():
 		return {}
 	var event: Dictionary = stock.news_events[random.randi_range(0, stock.news_events.size() - 1)].duplicate()
 	var impact := float(event.get("impact", 0.0)) * 0.55
@@ -91,7 +92,7 @@ func _maybe_intraday_event(stock: StockData) -> Dictionary:
 	stock.projection_high += impact
 	stock.projected_price_pence = maxi(PRICE_FLOOR_PENCE, roundi(float(stock.current_price_pence) * (1.0 + stock.projection_change)))
 	stock.current_news = str(event.get("text", "Market update"))
-	intraday_news_cooldowns[stock.symbol] = Time.get_ticks_msec() + 5_000
+	intraday_news_cooldowns[stock.symbol] = progress + INTRADAY_NEWS_COOLDOWN_PROGRESS
 	return {"symbol": stock.symbol, "news": stock.current_news, "impact": impact, "source": "COMPANY NEWS"}
 
 func resolve_day(state: GameState) -> Array[Dictionary]:

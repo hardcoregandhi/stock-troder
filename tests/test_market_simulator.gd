@@ -50,7 +50,7 @@ func test_resolution_archives_full_round_price_path() -> void:
 	simulator.start_trading(state)
 	simulator.update_live_prices(state, 0.5)
 	var stock = state.get_stock("AUR")
-	var live_sample_count := stock.live_price_history_pence.size()
+	var live_sample_count: int = stock.live_price_history_pence.size()
 	simulator.resolve_day(state)
 	assert_eq(stock.round_history_pence.size(), 1)
 	assert_eq(stock.round_history_pence[0].size(), live_sample_count + 1)

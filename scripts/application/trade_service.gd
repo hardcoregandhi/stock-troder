@@ -90,17 +90,18 @@ func plant_fake_news(state: GameState, symbol: String, direction: int) -> Dictio
 	stock.activate_fake_news(normalized_direction, projection_weight, stock.current_news)
 	return _manipulation_result(state, true, "Player-planted fake news posted for %s: %s direction. £75.00 spent; outcome is uncertain." % [symbol, "positive" if normalized_direction > 0 else "negative"], symbol, "fake_news", GameState.FAKE_NEWS_COST_PENCE, projection_weight, normalized_direction)
 
-func buy_call(state: GameState, symbol: String, quantity: int = 1) -> Dictionary:
-	return _buy_option(state, symbol, quantity, OptionContract.CALL)
+func buy_call(state: GameState, symbol: String, quantity: int = 1, time_remaining_ratio: float = 1.0) -> Dictionary:
+	return _buy_option(state, symbol, quantity, OptionContract.CALL, time_remaining_ratio)
 
-func buy_put(state: GameState, symbol: String, quantity: int = 1) -> Dictionary:
-	return _buy_option(state, symbol, quantity, OptionContract.PUT)
+func buy_put(state: GameState, symbol: String, quantity: int = 1, time_remaining_ratio: float = 1.0) -> Dictionary:
+	return _buy_option(state, symbol, quantity, OptionContract.PUT, time_remaining_ratio)
 
-static func option_premium_pence(stock: StockData) -> int:
+static func option_premium_pence(stock: StockData, time_remaining_ratio: float = 1.0) -> int:
 	var premium_rate := clampf(stock.volatility * 0.5 + 0.02, 0.03, 0.07)
-	return maxi(100, roundi(float(stock.current_price_pence) * premium_rate))
+	var time_factor := 0.25 + 0.75 * sqrt(clampf(time_remaining_ratio, 0.0, 1.0))
+	return maxi(100, roundi(float(stock.current_price_pence) * premium_rate * time_factor))
 
-func _buy_option(state: GameState, symbol: String, quantity: int, option_type: String) -> Dictionary:
+func _buy_option(state: GameState, symbol: String, quantity: int, option_type: String, time_remaining_ratio: float) -> Dictionary:
 	var stock := state.get_stock(symbol)
 	if state.phase != GameState.Phase.TRADING:
 		return _option_result(state, false, "%s options are only available during trading." % option_type, symbol, option_type, 0, 0, 0, quantity)
@@ -108,7 +109,7 @@ func _buy_option(state: GameState, symbol: String, quantity: int, option_type: S
 		return _option_result(state, false, "Unknown stock.", symbol, option_type, 0, 0, 0, quantity)
 	if quantity <= 0:
 		return _option_result(state, false, "Quantity must be positive.", symbol, option_type, 0, 0, 0, quantity)
-	var premium_per_contract := option_premium_pence(stock)
+	var premium_per_contract := option_premium_pence(stock, time_remaining_ratio)
 	var total_premium := premium_per_contract * quantity
 	if total_premium > state.cash_pence:
 		return _option_result(state, false, "Not enough cash for %s." % option_type, symbol, option_type, 0, premium_per_contract, 0, quantity)
