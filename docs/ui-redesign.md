@@ -1,5 +1,13 @@
 # StockTroder UI Redesign
 
+This is a forward-looking design plan. The current implementation described below
+is the starting point for the redesign, not the final visual target. Keep the
+rules and data contracts stable unless a separate game-design change is approved.
+
+Status labels: **Shipped** means the current build has this behavior, **Partial**
+means the foundation exists but the intended presentation is incomplete, and
+**Planned** means it is future work.
+
 ## 1. Design Goal
 
 The trading screen should feel like a live market board, not a stock picker with a detail popup.
@@ -15,11 +23,14 @@ The main questions should be visible at once:
 - What do I currently own?
 - Which Buy or Sell action should I take now?
 
-## 2. Economy Scale
+## 2. Economy Scale (Shipped Baseline)
 
-Use a smaller starting bankroll and larger share prices.
+The current economy uses a £1,000 starting bankroll, whole shares, pence-based
+internal values, and large share prices. Use these values as the starting point
+for the visual redesign; balance changes belong in the economy documents and
+tests, not in this visual redesign document.
 
-Initial target:
+Current baseline:
 
 - Starting cash: **£1,000**.
 - Shares are whole units.
@@ -27,7 +38,7 @@ Initial target:
 - A single share should represent a meaningful decision.
 - The player may go all-in on one stock or split money across several stocks.
 
-Suggested opening prices:
+Current opening prices:
 
 | Stock | Opening price | Position |
 | --- | ---: | --- |
@@ -38,7 +49,8 @@ Suggested opening prices:
 | EGF | £750 | Defensive food |
 | FRB | £1,000 | High-risk biotech |
 
-These prices are a first scale, not final balance values. The economy harness should test whether they create useful concentration and diversification choices.
+These prices are the current catalog baseline. Any future economy change should
+be reflected in the simulation tests and the player-facing screens together.
 
 With £1,000, a player can:
 
@@ -49,7 +61,7 @@ With £1,000, a player can:
 
 That is the intended tension.
 
-## 3. Primary Screen Layout
+## 3. Primary Screen Layout (Shipped, With Polish Remaining)
 
 ```text
 +---------------------------------------------------------------+
@@ -61,7 +73,7 @@ That is the intended tension.
 |                                                               |
 +----------------------+----------------------+-----------------+
 | Stock | Price | +/-  | Projection | Owned | BUY | SELL       |
-| AUR   | £50   | ...  | ...        | ...   |  +  |  -  | PUMP | SABOTAGE | FAKE+ | FAKE- |
+| AUR   | £50   | ...  | ...        | ...   |  +  |  -  | PUMP | SABOTAGE | HYPE | FUD | CALL | PUT |
 | BRK   | £100  | ...  | ...        | ...   |  +  |  -         |
 | ...                                                        |
 +----------------------+----------------------+-----------------+
@@ -72,9 +84,12 @@ That is the intended tension.
 
 The status bar is the top element. The graph and rows are the full main market surface and action surface. The news feed is the explanation surface.
 
-The dashboard must fit responsive 16:9 viewports. The graph stays above compact stock rows. Extra information moves to tabs or separate pages rather than scroll bars. The right panel contains only a readable news feed and short market context. Buy, Sell, Pump, and Sabotage remain row actions.
+The dashboard fits responsive 16:9 viewports. The graph stays above compact stock
+rows. The news panel is hidden at narrow widths, while chart ranges and secondary
+information use controls rather than page scrolling. Buy, Sell, Pump, Sabotage,
+Hype, Fud, Call, and Put remain row actions.
 
-## 4. Shared Market Graph
+## 4. Shared Market Graph (Shipped, With Polish Remaining)
 
 The graph shows every configured stock at once.
 
@@ -95,9 +110,12 @@ The graph must also support:
 - A non-color label for every series.
 - Fewer than six series when a multiplayer match is configured with a smaller catalog.
 
-The graph should use a normalized movement view or an absolute price view deliberately. Absolute prices make money value clear. A normalized percentage view makes performance comparison clear. The first version should show absolute price with percentage change in the legend.
+The live graph currently uses normalized percentage movement from the selected
+range start. The redesign should preserve that comparison-friendly behavior,
+while making the range label and price context clearer. Debrief also provides
+day-results and game-so-far ranges.
 
-## 5. Stock Rows
+## 5. Stock Rows (Shipped)
 
 Each stock row is a complete quick-trade control.
 
@@ -113,7 +131,7 @@ Show:
 - Position value.
 - One-share Buy button.
 - One-share Sell button.
-- Pump, Sabotage, Fake+ and Fake- action buttons after Buy and Sell.
+- Pump, Sabotage, Hype, Fud, Call, and Put action buttons after Buy and Sell.
 
 The buttons should buy or sell one share. A selected-stock panel can provide a quantity control for larger orders, but the common action must be fast.
 
@@ -123,9 +141,12 @@ When the player cannot act:
 - Show a short reason for rejection.
 - Never hide the stock row.
 
-Manipulation buttons show their paid cost in the tooltip, become unavailable outside `TRADING`, and change to an active label after use. The row remains the only manipulation control surface; do not duplicate these controls in a detail panel.
+Manipulation and option buttons show their paid cost in the tooltip, become
+unavailable outside `TRADING`, and change to an active label after use. The row
+remains the only action surface; do not duplicate these controls in a detail
+panel.
 
-## 6. News Feed
+## 6. News Feed (Shipped, With Polish Remaining)
 
 News becomes a first-class market signal.
 
@@ -152,7 +173,8 @@ ROUND 3  CYN  New energy contract announced
 Resolved: +12.4%
 ```
 
-Player-planted stories use a separate source label:
+Player-planted stories use a separate source label. Current action and network
+events should remain distinguishable from market signals:
 
 ```text
 ROUND 3  CYN  FORECAST
@@ -161,7 +183,7 @@ PLAYER-PLANTED FAKE: New energy contract announced
 
 The feed should not reveal the exact future price before resolution.
 
-## 7. Single-Player View
+## 7. Single-Player View (Shipped)
 
 Single-player should show:
 
@@ -182,27 +204,31 @@ Forward actions use one consistent rule:
 - Keep Back, Exit, and Cancel separate from the forward action.
 - Keep the action visible without scrolling.
 
-## 8. Multiplayer View
+## 8. Multiplayer View (Partial)
 
-The market graph and stock rows remain shared.
+The market graph and stock rows remain shared. The current build also supports
+three deterministic computer players in local runs, network readiness, and
+rankings ordered by return.
 
-Add a compact player panel:
+The current rankings panel provides the shared player comparison. The intended
+compact player panel is:
 
 | Player | Cash | Portfolio | Return | Holdings |
 | --- | ---: | ---: | ---: | --- |
 | You | £... | £... | ... | AUR 2, CYN 1 |
 | Alex | £... | £... | ... | BRK 3 |
 
-Multiplayer visibility rule for the first version:
+Multiplayer visibility rule:
 
 - Show each player's cash, portfolio value, return, and stock holdings.
 - Show no private order history or hidden manipulation intentions.
 - Make it clear that all players see the same market.
 - Keep each player's portfolio separate.
 
-This creates strategic information without requiring a player-driven market price model yet.
+This creates strategic information without requiring a player-driven market
+price model.
 
-## 9. Debrief View
+## 9. Debrief View (Shipped, With Polish Remaining)
 
 The debrief should reuse the shared graph and add a round result table.
 
@@ -211,7 +237,7 @@ Show:
 - Opening and closing prices for every stock.
 - Percentage movement.
 - Resolved news.
-- Action markers for Pump, Sabotage, and Fake News, including correction and backfire status.
+- Action markers for Pump, Sabotage, Hype, Fud, Call, and Put, including correction, backfire, and settlement status.
 - Player's round profit/loss.
 - Other players' round profit/loss in multiplayer.
 - Updated holdings and cash.
@@ -219,7 +245,7 @@ Show:
 
 The player should be able to compare the forecast with the result before starting the next round.
 
-## 10. Options
+## 10. Options (Partial)
 
 Options should not change competitive economy rules.
 
@@ -233,27 +259,39 @@ Useful settings:
 
 The stock palette must retain text symbols and shapes so color is not the only signal.
 
-## 11. Implementation Order
+## 10.1 Run Complete Screen Polish (Planned)
 
-1. Change the economic scale to £1,000 starting cash and large stock prices.
-2. Preserve configurable stock count and stable catalog order.
-3. Build the shared all-stock graph and legend.
-4. Rebuild stock rows as quick-trade controls.
-5. Add the news feed.
-6. Add multiplayer player holdings panel.
-7. Rebuild debrief around the shared graph and round table.
-8. Add display and accessibility options.
-9. Re-run the economy balance harness across stock counts and price scales.
+Improve the run-complete screen so the ending feels like a clear payoff, not another debrief panel.
 
-## 12. Acceptance Criteria
+- Make the winner the first visual signal with a large, unmistakable winner reveal and a short celebratory "Tada" moment.
+- Present final standings in a strong hierarchy: winner, final portfolio value, total return, starting cash, and profit/loss.
+- Show the player's final stats at a glance, with enough detail to explain the result without making the screen feel like a spreadsheet.
+- Add a compact run recap for standout moments such as best trade, biggest gain, biggest loss, and manipulation outcomes.
+- Use restrained motion, sound, and highlight treatment to make the reveal feel special while keeping all values readable and accessible.
+- Keep `RESTART` and return-to-menu actions in the bottom-right action area after the result has been understood.
 
-- All configured stocks are visible on one live graph.
-- Each stock has a stable color and text legend entry.
-- Every stock row has Buy and Sell controls.
-- A one-share trade is one quick action.
-- Stock prices are large enough that one share matters.
-- A £1,000 player can go all-in or diversify.
-- The news feed explains current signals without revealing exact future prices.
-- Multiplayer shows other players' holdings without allowing client-side authority.
-- The graph and rows handle one to six configured stocks.
-- The same UI works for single-player and multiplayer market state.
+The current screen already shows the run title, millionaire victory message,
+starting cash, final cash, total return, days completed, final holdings, rankings,
+and restart. The planned redesign should improve hierarchy and celebration
+without changing scoring or the summary contract.
+
+## 11. Remaining Forward Polish Plan
+
+1. Rework the run-complete layout around the winner and final result.
+2. Add final-stat cards or a compact stat grid for value, return, cash, and days.
+3. Add a readable run recap using completed round data for best and worst moments.
+4. Replace the generic player-id victory text with the winner display name and rank context.
+5. Add restrained reveal motion and optional sound, with a reduced-motion fallback.
+6. Complete the opponent holdings panel and options persistence where still missing.
+7. Review narrow-width behavior so the result and actions remain visible without scrolling.
+
+## 12. Target Review Checklist
+
+- The live dashboard shows all configured stocks with stable color and text labels.
+- Every stock row exposes Buy, Sell, manipulation, and option actions with clear disabled states.
+- The live chart identifies whether it shows round, recent-history, or game-so-far movement.
+- The news feed separates forecast, market, player, AI, and network activity.
+- Debrief shows resolved prices, action outcomes, portfolio result, and rankings.
+- Run complete names the winner, explains the final result, and makes the next action obvious.
+- Local and network summaries use the same readable hierarchy.
+- The dashboard and result screens remain usable at narrow widths without accidental overflow.
