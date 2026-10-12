@@ -15,6 +15,7 @@ func _ready() -> void:
 	network_lobby.name = "NetworkLobby"
 	add_child(network_lobby)
 	network_lobby.match_started.connect(_on_network_match_started)
+	network_lobby.intent_received.connect(_on_network_intent_received)
 	network_lobby.match_state_received.connect(_on_network_state_received)
 	network_lobby.match_event_received.connect(_on_network_event_received)
 	network_lobby.match_ended.connect(_on_network_match_ended)
@@ -72,6 +73,10 @@ func _on_network_match_started(player_ids: Array[int], host: bool) -> void:
 func _on_network_state_received(snapshot: Dictionary) -> void:
 	if session != null and session.network_mode and not session.network_is_host:
 		session.apply_network_snapshot(snapshot)
+
+func _on_network_intent_received(peer_id: int, action: String, symbol: String, quantity: int) -> void:
+	if session != null and session.network_mode and session.network_is_host:
+		session.receive_network_intent(peer_id, action, symbol, quantity)
 
 func _on_network_event_received(event: Dictionary) -> void:
 	if session == null or not session.network_mode:
