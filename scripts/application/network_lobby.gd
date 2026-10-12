@@ -19,6 +19,8 @@ var local_ready := false
 var players: Dictionary[int, Dictionary] = {}
 var _peer: ENetMultiplayerPeer
 var match_active := false
+var _upnp_thread: Thread
+var _upnp_generation := 0
 
 func _ready() -> void:
 	multiplayer.peer_connected.connect(_on_peer_connected)
@@ -41,6 +43,7 @@ func host(port: int) -> bool:
 	players = {1: {"id": 1, "name": "Host", "ready": true}}
 	status_changed.emit(connection_state)
 	players_changed.emit(player_list())
+	_start_upnp_mapping(port)
 	return true
 
 func join(address: String, port: int) -> bool:
@@ -225,7 +228,43 @@ func _set_status(status: String) -> void:
 	connection_state = status
 	status_changed.emit(status)
 
+func _start_upnp_mapping(port: int) -> void:
+	_upnp_generation += 1
+	_upnp_thread = Thread.new()
+	_upnp_thread.start(_discover_upnp.bind(port, _upnp_generation))
+
+func _discover_upnp(port: int, generation: int) -> void:
+	var upnp := UPNP.new()
+	var discovery_error := upnp.discover()
+	if discovery_error != UPNP.UPNP_RESULT_SUCCESS:
+		call_deferred("_complete_upnp_mapping", generation, false, "discovery failed (%d)" % discovery_error)
+		return
+	var gateway := upnp.get_gateway()
+	if gateway == null or not gateway.is_valid_gateway():
+		call_deferred("_complete_upnp_mapping", generation, false, "no compatible gateway")
+		return
+	var mapping_error := upnp.add_port_mapping(port, port, "StockTroder", "UDP")
+	if mapping_error == UPNP.UPNP_RESULT_SUCCESS:
+		call_deferred("_complete_upnp_mapping", generation, true, "UDP %d mapped" % port)
+	else:
+		call_deferred("_complete_upnp_mapping", generation, false, "mapping failed (%d)" % mapping_error)
+
+func _complete_upnp_mapping(generation: int, success: bool, message: String) -> void:
+	if _upnp_thread != null:
+		_upnp_thread.wait_to_finish()
+		_upnp_thread = null
+	if generation != _upnp_generation or not is_host:
+		return
+	if success:
+		status_changed.emit("Connected as host; UPnP %s" % message)
+	else:
+		status_changed.emit("Connected as host; UPnP unavailable: %s" % message)
+
 func _disconnect(clear_status: bool) -> void:
+	_upnp_generation += 1
+	if _upnp_thread != null:
+		_upnp_thread.wait_to_finish()
+		_upnp_thread = null
 	match_active = false
 	if multiplayer.multiplayer_peer != null:
 		multiplayer.multiplayer_peer.close()
