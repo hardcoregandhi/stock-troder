@@ -18,12 +18,10 @@ const MAX_HISTORY_INFLUENCE: float = 0.025
 const INTRADAY_NEWS_COOLDOWN_PROGRESS: float = 1.0 / 6.0
 
 var random: RandomNumberGenerator = RandomNumberGenerator.new()
-var seed: int
 var intraday_news_cooldowns: Dictionary = {}
 var last_intraday_events: Array[Dictionary] = []
 
 func _init(run_seed: int = 0) -> void:
-	seed = run_seed
 	random.seed = run_seed
 
 func prepare_day(state: GameState) -> Array[Dictionary]:

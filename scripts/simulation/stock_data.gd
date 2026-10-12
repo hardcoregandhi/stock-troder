@@ -107,7 +107,8 @@ func set_projection(change: float, low: float, high: float, news: String, impact
 	projection_confidence = _confidence_label()
 	current_news = news
 	news_impact = impact
-	projected_price_pence = maxi(100, roundi(float(current_price_pence) * (1.0 + change)))
+	var projected_price: int = roundi(float(current_price_pence) * (1.0 + change))
+	projected_price_pence = maxi(100, projected_price)
 
 func set_live_price(price_pence: int) -> void:
 	current_price_pence = maxi(100, price_pence)

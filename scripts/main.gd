@@ -81,7 +81,7 @@ func _on_network_event_received(event: Dictionary) -> void:
 	else:
 		session.apply_network_event(event)
 
-func _on_network_match_ended(reason: String) -> void:
+func _on_network_match_ended(_reason: String) -> void:
 	if session != null:
 		network_lobby.disconnect_lobby()
 	_show_main_menu()

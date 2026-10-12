@@ -10,11 +10,11 @@ var random := RandomNumberGenerator.new()
 var decision_elapsed: float = 0.0
 var decision_interval: float = 1.5
 
-func _init(new_player_id: int, new_name: String, new_profile: String, seed: int) -> void:
+func _init(new_player_id: int, new_name: String, new_profile: String, run_seed: int) -> void:
 	player_id = new_player_id
 	display_name = new_name
 	risk_profile = new_profile if new_profile in RISK_PROFILES else "BALANCED"
-	random.seed = seed
+	random.seed = run_seed
 	decision_interval = 1.0 + random.randf() * 0.8
 
 func tick(delta: float, state: GameState, trade_service: TradeService, time_remaining_ratio: float = 1.0) -> Dictionary:

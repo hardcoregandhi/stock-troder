@@ -110,7 +110,9 @@ func start_network_host(lobby: NetworkLobby, player_ids: Array[int], run_seed: i
 		network_ready_players[player_id] = false
 	_publish_network_state()
 	if game_state != null and game_state.phase == GameState.Phase.BRIEF:
-		brief_started.emit(game_state.current_day, [], [])
+		var empty_projections: Array[Dictionary] = []
+		var empty_news: Array[Dictionary] = []
+		brief_started.emit(game_state.current_day, empty_projections, empty_news)
 
 func start_network_client(lobby: NetworkLobby, player_id: int) -> void:
 	network_lobby = lobby

@@ -32,13 +32,11 @@ var pumped_symbols: Dictionary = {}
 var sabotaged_symbols: Dictionary = {}
 var fake_news_symbols: Dictionary = {}
 var manipulation_cooldowns: Dictionary = {}
-var seed: int
 var stock_count: int = DEFAULT_STOCK_COUNT
 
 const TRADE_SERVICE = preload("res://scripts/application/trade_service.gd")
 
 func _init(run_seed: int = 0, run_total_days: int = DEFAULT_TOTAL_DAYS, run_stock_count: int = DEFAULT_STOCK_COUNT) -> void:
-	seed = run_seed
 	total_days = maxi(1, run_total_days)
 	stock_count = clampi(run_stock_count, MIN_STOCK_COUNT, MAX_STOCK_COUNT)
 	stocks = StockData.create_default_catalog(stock_count)

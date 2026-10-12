@@ -142,7 +142,7 @@ func _option_result(state: GameState, success: bool, message: String, symbol: St
 	}
 
 func _format_pence(value: int) -> String:
-	return "£%d.%02d" % [value / 100, value % 100]
+	return "£%d.%02d" % [floori(float(value) / 100.0), value % 100]
 
 func _trade_result(
 	state: GameState,

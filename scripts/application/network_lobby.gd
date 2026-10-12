@@ -61,15 +61,15 @@ func join(address: String, port: int) -> bool:
 	_set_status(connection_state)
 	return true
 
-func set_ready(ready: bool) -> void:
+func set_ready(ready_value: bool) -> void:
 	if not is_lobby_connected():
 		return
-	local_ready = ready
+	local_ready = ready_value
 	if is_host:
-		players[1]["ready"] = ready
+		players[1]["ready"] = ready_value
 		_broadcast_players()
 	else:
-		_submit_ready.rpc_id(1, ready)
+		_submit_ready.rpc_id(1, ready_value)
 		players[multiplayer.get_unique_id()] = {"id": multiplayer.get_unique_id(), "name": "Player %d" % multiplayer.get_unique_id(), "ready": ready}
 	players_changed.emit(player_list())
 
@@ -151,11 +151,11 @@ func player_list() -> Array[Dictionary]:
 	return result
 
 @rpc("any_peer", "reliable")
-func _submit_ready(ready: bool) -> void:
+func _submit_ready(ready_value: bool) -> void:
 	if not is_host or not multiplayer.is_server():
 		return
 	var peer_id := multiplayer.get_remote_sender_id()
-	players[peer_id] = {"id": peer_id, "name": "Player %d" % peer_id, "ready": ready}
+	players[peer_id] = {"id": peer_id, "name": "Player %d" % peer_id, "ready": ready_value}
 	_broadcast_players()
 
 @rpc("any_peer", "reliable")
