@@ -66,7 +66,7 @@ class ResponsiveShell extends Control:
 		var available_width := maxf(0.0, size.x - horizontal_gutter * 2.0)
 		var content_width := minf(max_content_width, available_width)
 		content.position = Vector2((size.x - content_width) * 0.5, 22.0)
-		content.set_deferred("size", Vector2(content_width, maxf(0.0, size.y - 44.0)))
+		content.size = Vector2(content_width, maxf(0.0, size.y - 44.0))
 
 class StockHistoryChart extends Control:
 	var series: Array[Dictionary] = []
@@ -632,13 +632,13 @@ func _build_stock_rows(state: GameState) -> void:
 		var change := _label("", 12, ACCENT)
 		change.custom_minimum_size.x = 62
 		metrics.add_child(change)
-		var range_label := _label("", 11, ACCENT)
-		range_label.custom_minimum_size.x = 112
-		range_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		metrics.add_child(range_label)
-		var position_label := _label("", 11, TEXT)
-		position_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		row_content.add_child(position_label)
+		var range := _label("", 11, ACCENT)
+		range.custom_minimum_size.x = 112
+		range.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		metrics.add_child(range)
+		var position := _label("", 11, TEXT)
+		position.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		row_content.add_child(position)
 		var trade_actions := HBoxContainer.new()
 		trade_actions.add_theme_constant_override("separation", 5)
 		trade_actions.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -694,13 +694,13 @@ func _build_stock_rows(state: GameState) -> void:
 		_style_action_button(fud, NEGATIVE)
 		fud.pressed.connect(_quick_fake_news.bind(stock.symbol, -1))
 		market_actions.add_child(fud)
-		var call_button := Button.new()
-		call_button.text = "CALL"
-		call_button.tooltip_text = "Buy a one-round call at the current price. Premium reflects volatility and time remaining."
-		call_button.custom_minimum_size = Vector2(0, 25)
-		call_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		_style_action_button(call_button, ACCENT)
-		call_button.pressed.connect(_quick_call.bind(stock.symbol))
+		var call := Button.new()
+		call.text = "CALL"
+		call.tooltip_text = "Buy a one-round call at the current price. Premium reflects volatility and time remaining."
+		call.custom_minimum_size = Vector2(0, 25)
+		call.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_style_action_button(call, ACCENT)
+		call.pressed.connect(_quick_call.bind(stock.symbol))
 		var put := Button.new()
 		put.text = "PUT"
 		put.tooltip_text = "Buy a one-round put at the current price. Premium reflects volatility and time remaining."
@@ -708,10 +708,10 @@ func _build_stock_rows(state: GameState) -> void:
 		put.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		_style_action_button(put, NEGATIVE)
 		put.pressed.connect(_quick_put.bind(stock.symbol))
-		market_actions.add_child(call_button)
+		market_actions.add_child(call)
 		market_actions.add_child(put)
 		row_content.add_child(market_actions)
-		row_labels[stock.symbol] = {"price": price, "change": change, "range": range_label, "shares": null, "position": position_label, "buy": buy, "sell": sell, "pump": pump, "sabotage": sabotage, "hype": hype, "fud": fud, "call": call_button, "put": put}
+		row_labels[stock.symbol] = {"price": price, "change": change, "range": range, "shares": null, "position": position, "buy": buy, "sell": sell, "pump": pump, "sabotage": sabotage, "hype": hype, "fud": fud, "call": call, "put": put}
 	_update_stock_rows(state)
 
 func _style_action_button(button: Button, color: Color) -> void:
@@ -1259,7 +1259,7 @@ func _restart_run() -> void:
 		child.free()
 	session.start_run()
 
-func _build_debrief_chart(_resolutions: Array[Dictionary]) -> Control:
+func _build_debrief_chart(resolutions: Array[Dictionary]) -> Control:
 	var panel := _panel()
 	var content := VBoxContainer.new()
 	content.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -1441,8 +1441,8 @@ func _holdings_text_from_dictionary(holdings: Dictionary) -> String:
 
 static func _format_pence(value: int) -> String:
 	var absolute_value := absi(value)
-	var sign_text := "-" if value < 0 else ""
-	return "%s£%d.%02d" % [sign_text, floori(float(absolute_value) / 100.0), absolute_value % 100]
+	var sign := "-" if value < 0 else ""
+	return "%s£%d.%02d" % [sign, absolute_value / 100, absolute_value % 100]
 
 static func _signed_pence(value: int) -> String:
 	return ("+" if value >= 0 else "") + _format_pence(value)

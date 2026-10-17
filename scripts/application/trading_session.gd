@@ -37,7 +37,6 @@ var market_simulator: MarketSimulator
 var trade_service: TradeService
 var round_resolution_service: RoundResolutionService
 var day_timer: DayTimer
-var round_length_seconds: float = DAY_LENGTH_SECONDS
 var market_sample_elapsed: float = 0.0
 var network_lobby: NetworkLobby
 var network_mode := false
@@ -91,7 +90,7 @@ func _create_computer_players(run_seed: int) -> void:
 		computer_players.append(player)
 		computer_player_states[player_id] = state
 
-func start_network_host(lobby: NetworkLobby, player_ids: Array[int], run_seed: int = DEFAULT_SEED, run_total_days: int = GameState.DEFAULT_TOTAL_DAYS) -> void:
+func start_network_host(lobby: NetworkLobby, player_ids: Array[int], run_seed: int = DEFAULT_SEED) -> void:
 	network_lobby = lobby
 	network_mode = true
 	network_is_host = true
@@ -102,7 +101,7 @@ func start_network_host(lobby: NetworkLobby, player_ids: Array[int], run_seed: i
 	network_trading_ready_total = player_ids.size()
 	network_local_trading_ready = false
 	network_rankings.clear()
-	start_run(run_seed, run_total_days, GameState.DEFAULT_STOCK_COUNT, false)
+	start_run(run_seed, GameState.DEFAULT_TOTAL_DAYS, GameState.DEFAULT_STOCK_COUNT, false)
 	for player_id in player_ids:
 		var player_state: GameState = game_state if player_id == network_local_player_id else GameState.create_default(run_seed, game_state.total_days)
 		player_state.stocks = game_state.stocks
@@ -111,9 +110,7 @@ func start_network_host(lobby: NetworkLobby, player_ids: Array[int], run_seed: i
 		network_ready_players[player_id] = false
 	_publish_network_state()
 	if game_state != null and game_state.phase == GameState.Phase.BRIEF:
-		var empty_projections: Array[Dictionary] = []
-		var empty_news: Array[Dictionary] = []
-		brief_started.emit(game_state.current_day, empty_projections, empty_news)
+		brief_started.emit(game_state.current_day, [], [])
 
 func start_network_client(lobby: NetworkLobby, player_id: int) -> void:
 	network_lobby = lobby
@@ -242,7 +239,7 @@ func buy_put(symbol: String, quantity: int = 1) -> Dictionary:
 func option_time_remaining_ratio() -> float:
 	if day_timer == null or not day_timer.running:
 		return 1.0
-	return clampf(day_timer.seconds_remaining / round_length_seconds, 0.0, 1.0)
+	return clampf(day_timer.seconds_remaining / DAY_LENGTH_SECONDS, 0.0, 1.0)
 
 func _emit_option_result(result: Dictionary) -> void:
 	if bool(result.get("success", false)):
@@ -296,7 +293,7 @@ func start_trading_round() -> bool:
 		return false
 	if not market_simulator.start_trading(game_state):
 		return false
-	day_timer.start(round_length_seconds)
+	day_timer.start(DAY_LENGTH_SECONDS)
 	for player_state in computer_player_states.values():
 		player_state.phase = GameState.Phase.TRADING
 	if network_mode and network_is_host:
@@ -528,7 +525,7 @@ func _process(delta: float) -> void:
 	market_sample_elapsed += delta
 	while market_sample_elapsed >= MARKET_SAMPLE_INTERVAL_SECONDS:
 		market_sample_elapsed -= MARKET_SAMPLE_INTERVAL_SECONDS
-		var progress := 1.0 - (day_timer.seconds_remaining / round_length_seconds)
+		var progress := 1.0 - (day_timer.seconds_remaining / DAY_LENGTH_SECONDS)
 		market_simulator.update_live_prices(game_state, progress)
 		for news_event in market_simulator.last_intraday_events:
 			market_news_event.emit(news_event)
