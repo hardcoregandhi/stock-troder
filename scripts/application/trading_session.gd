@@ -117,8 +117,6 @@ func start_network_host(
 		network_ready_players[player_id] = false
 		network_completed_rounds[player_id] = []
 	_publish_network_state()
-	if game_state != null and game_state.phase == GameState.Phase.BRIEF:
-		brief_started.emit(game_state.current_day, [], [])
 
 func start_network_client(lobby: NetworkLobby, player_id: int) -> void:
 	network_lobby = lobby
@@ -259,11 +257,16 @@ func _emit_option_result(result: Dictionary) -> void:
 func continue_to_next_day() -> bool:
 	if network_mode and not network_is_host:
 		network_lobby.submit_ready_for_next_day()
+		if not network_local_trading_ready:
+			network_local_trading_ready = true
+			network_trading_ready_count = mini(network_trading_ready_count + 1, network_trading_ready_total)
+			network_readiness_changed.emit(network_trading_ready_count, network_trading_ready_total, true)
 		return false
 	if network_mode and network_is_host:
 		network_ready_players[network_local_player_id] = true
 		if not _all_network_players_ready():
 			network_status_changed.emit("Waiting for every player to ready up.")
+			_publish_network_state()
 			return false
 		for player_id in network_ready_players:
 			network_ready_players[player_id] = false
@@ -482,6 +485,7 @@ func _mark_network_player_ready(player_id: int) -> void:
 		continue_to_next_day()
 	else:
 		network_lobby.send_match_event({"type": "status", "message": "Player %d is ready. Waiting for the rest." % player_id})
+		_publish_network_state()
 
 func _mark_network_player_ready_for_trading(player_id: int) -> void:
 	if game_state == null or game_state.phase != GameState.Phase.BRIEF:

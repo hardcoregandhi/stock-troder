@@ -40,6 +40,7 @@ var opponent_holdings_label: Label
 var news_history: Array[Dictionary] = []
 var pause_layer: Control
 var start_trading_button: Button
+var next_day_button: Button
 var responsive_page: Control
 var dashboard_body: HBoxContainer
 var secondary_tabs: TabContainer
@@ -442,6 +443,16 @@ func _on_time_updated(seconds: float) -> void:
 
 func _on_market_updated(_snapshot: Dictionary) -> void:
 	_refresh()
+	if session.game_state.phase != GameState.Phase.DEBRIEF and debrief_layer != null:
+		debrief_layer.queue_free()
+		debrief_layer = null
+		debrief_panel = null
+		next_day_button = null
+	if session.game_state.phase != GameState.Phase.BRIEF and brief_layer != null:
+		brief_layer.queue_free()
+		brief_layer = null
+		brief_panel = null
+		start_trading_button = null
 	if session.game_state.phase == GameState.Phase.BRIEF and brief_panel == null and summary_panel == null:
 		_show_brief(session.game_state.current_day)
 
@@ -563,6 +574,7 @@ func _on_network_status_changed(message: String) -> void:
 
 func _on_network_readiness_changed(_ready_count: int, _total_count: int, _local_ready: bool) -> void:
 	_update_start_trading_button()
+	_update_next_day_button()
 
 func _on_news_filter_selected(_index: int) -> void:
 	if session != null and session.game_state != null:
@@ -1006,9 +1018,10 @@ func _show_debrief(day: int, resolutions: Array[Dictionary]) -> void:
 	action_bar.alignment = BoxContainer.ALIGNMENT_END
 	content.add_child(action_bar)
 	if session.game_state.phase == GameState.Phase.DEBRIEF:
-		var next_day := _forward_button("NEXT DAY", Vector2(150, 38))
-		next_day.pressed.connect(_continue_after_debrief)
-		action_bar.add_child(next_day)
+		next_day_button = _forward_button("NEXT DAY", Vector2(190, 38))
+		next_day_button.pressed.connect(_continue_after_debrief)
+		action_bar.add_child(next_day_button)
+		_update_next_day_button()
 
 func _build_debrief_news_panel(resolutions: Array[Dictionary]) -> Control:
 	var panel := _panel()
@@ -1183,6 +1196,21 @@ func _update_start_trading_button() -> void:
 	var total_count := session.network_trading_ready_total
 	start_trading_button.text = "START TRADING (%d/%d)" % [ready_count, total_count]
 	start_trading_button.disabled = session.network_local_trading_ready or total_count <= 0
+
+func _update_next_day_button() -> void:
+	if next_day_button == null or session == null:
+		return
+	if not session.network_mode:
+		next_day_button.text = "NEXT DAY"
+		next_day_button.disabled = false
+		return
+	var ready_count := session.network_trading_ready_count
+	var total_count := session.network_trading_ready_total
+	if session.network_local_trading_ready:
+		next_day_button.text = "WAITING (%d/%d)" % [ready_count, total_count]
+	else:
+		next_day_button.text = "NEXT DAY (%d/%d)" % [ready_count, total_count]
+	next_day_button.disabled = session.network_local_trading_ready or total_count <= 0
 
 func _start_trading_from_brief() -> void:
 	if session.start_trading_round() and brief_panel != null:
