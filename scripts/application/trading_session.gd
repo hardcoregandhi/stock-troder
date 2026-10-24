@@ -158,7 +158,7 @@ func remove_network_player(peer_id: int) -> void:
 		return
 	network_player_states.erase(peer_id)
 	network_ready_players.erase(peer_id)
-	network_status_changed.emit("Player %d disconnected. Match continues." % peer_id)
+	network_status_changed.emit("A player disconnected. Match continues.")
 	if game_state == null or not _all_network_players_ready():
 		return
 	if game_state.phase == GameState.Phase.DEBRIEF:
@@ -417,7 +417,7 @@ func _publish_network_state() -> void:
 		network_trading_ready_total = network_ready_players.size()
 		network_local_trading_ready = bool(network_ready_players.get(network_local_player_id, false))
 		network_readiness_changed.emit(network_trading_ready_count, network_trading_ready_total, network_local_trading_ready)
-		network_rankings = _network_rankings(int(player_id))
+		network_rankings = _network_rankings()
 		var market_snapshot := _network_market_snapshot()
 		market_snapshot["completed_rounds"] = network_completed_rounds.get(player_id, completed_rounds).duplicate(true)
 		market_snapshot["network_local_ready"] = bool(network_ready_players.get(player_id, false))
@@ -486,7 +486,7 @@ func _mark_network_player_ready(player_id: int) -> void:
 		continue_to_next_day()
 	else:
 		_publish_network_state()
-		network_lobby.send_match_event({"type": "status", "message": "Player %d is ready. Waiting for the rest." % player_id})
+		network_lobby.send_match_event({"type": "status", "message": "%s is ready. Waiting for the rest." % network_player_display_name(player_id)})
 
 func _mark_network_player_ready_for_trading(player_id: int) -> void:
 	if game_state == null or game_state.phase != GameState.Phase.BRIEF:
@@ -496,7 +496,7 @@ func _mark_network_player_ready_for_trading(player_id: int) -> void:
 		start_trading_round()
 	else:
 		_publish_network_state()
-		network_lobby.send_match_event({"type": "status", "message": "Player %d is ready to trade. Waiting for the rest." % player_id})
+		network_lobby.send_match_event({"type": "status", "message": "%s is ready to trade. Waiting for the rest." % network_player_display_name(player_id)})
 
 func _network_ready_count() -> int:
 	var ready_count := 0
@@ -653,18 +653,16 @@ func _network_action_rejection(symbol: String, action: String) -> Dictionary:
 		"cost_pence": 0,
 	}
 
-func _network_rankings(viewer_player_id: int = -1) -> Array[Dictionary]:
+func _network_rankings() -> Array[Dictionary]:
 	var rankings: Array[Dictionary] = []
 	var states: Dictionary = network_player_states if network_mode and network_is_host else {network_local_player_id: game_state}
-	var ranking_viewer_id := network_local_player_id if viewer_player_id < 0 else viewer_player_id
 	if not network_mode:
 		for player_id in computer_player_states:
 			states[player_id] = computer_player_states[player_id]
 	for player_id in states:
 		var player_state: GameState = states[player_id]
 		var is_local_player := int(player_id) == network_local_player_id
-		var is_viewer := int(player_id) == ranking_viewer_id
-		var display_name := "You" if is_viewer else "PLAYER %d" % int(player_id) if network_mode else _computer_name(int(player_id))
+		var display_name := network_player_display_name(int(player_id)) if network_mode else "You" if is_local_player else _computer_name(int(player_id))
 		var risk_profile := "HUMAN" if network_mode or is_local_player else _computer_profile(int(player_id))
 		rankings.append({
 			"player_id": int(player_id),
@@ -677,6 +675,14 @@ func _network_rankings(viewer_player_id: int = -1) -> Array[Dictionary]:
 		})
 	rankings.sort_custom(func(left: Dictionary, right: Dictionary) -> bool: return int(left["return_pence"]) > int(right["return_pence"]))
 	return rankings
+
+func network_player_display_name(player_id: int) -> String:
+	if network_lobby != null:
+		return network_lobby.player_display_name(player_id)
+	var player_ids: Array = network_player_states.keys()
+	player_ids.sort()
+	var player_number := player_ids.find(player_id) + 1
+	return "Player %d" % player_number if player_number > 0 else "Player"
 
 func _computer_name(player_id: int) -> String:
 	for player in computer_players:

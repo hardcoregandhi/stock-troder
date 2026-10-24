@@ -3,6 +3,8 @@ extends Node
 
 const DEFAULT_PORT := 7000
 const MAX_PLAYERS := 4
+const MAX_PLAYER_NAME_LENGTH := 20
+const DEFAULT_PLAYER_NAME := "Trader"
 
 signal status_changed(status: String)
 signal players_changed(players: Array[Dictionary])
@@ -16,6 +18,7 @@ signal match_ended(reason: String)
 var is_host := false
 var connection_state := "Disconnected"
 var local_ready := false
+var local_player_name := DEFAULT_PLAYER_NAME
 var players: Dictionary[int, Dictionary] = {}
 var _peer: ENetMultiplayerPeer
 var match_active := false
@@ -28,6 +31,10 @@ func _ready() -> void:
 	multiplayer.connected_to_server.connect(_on_connected_to_server)
 	multiplayer.connection_failed.connect(_on_connection_failed)
 	multiplayer.server_disconnected.connect(_on_server_disconnected)
+
+func set_player_name(player_name: String) -> void:
+	var normalized_name := player_name.strip_edges().left(MAX_PLAYER_NAME_LENGTH)
+	local_player_name = DEFAULT_PLAYER_NAME if normalized_name.is_empty() else normalized_name
 
 func host(port: int) -> bool:
 	_disconnect(false)
@@ -42,7 +49,7 @@ func host(port: int) -> bool:
 	is_host = true
 	local_ready = true
 	connection_state = "Connected as host"
-	players = {1: {"id": 1, "name": "Host", "ready": true}}
+	players = {1: {"id": 1, "name": local_player_name, "ready": true}}
 	_log_network("host listening port=%d capacity=%d" % [port, MAX_PLAYERS])
 	status_changed.emit(connection_state)
 	players_changed.emit(player_list())
@@ -80,8 +87,8 @@ func set_ready(ready_value: bool) -> void:
 		players[1]["ready"] = ready_value
 		_broadcast_players()
 	else:
-		_submit_ready.rpc_id(1, ready_value)
-		players[multiplayer.get_unique_id()] = {"id": multiplayer.get_unique_id(), "name": "Player %d" % multiplayer.get_unique_id(), "ready": ready}
+		_submit_ready.rpc_id(1, ready_value, local_player_name)
+		players[multiplayer.get_unique_id()] = {"id": multiplayer.get_unique_id(), "name": local_player_name, "ready": ready}
 	players_changed.emit(player_list())
 
 func request_start_match() -> void:
@@ -163,15 +170,27 @@ func player_list() -> Array[Dictionary]:
 	for player in players.values():
 		result.append(player.duplicate())
 	result.sort_custom(func(left: Dictionary, right: Dictionary) -> bool: return int(left["id"]) < int(right["id"]))
+	for index in result.size():
+		if str(result[index].get("name", "")).strip_edges().is_empty():
+			result[index]["name"] = "Player %d" % (index + 1)
 	return result
 
+func player_display_name(peer_id: int) -> String:
+	for player in player_list():
+		if int(player["id"]) == peer_id:
+			return str(player["name"])
+	return "Player"
+
 @rpc("any_peer", "reliable")
-func _submit_ready(ready_value: bool) -> void:
+func _submit_ready(ready_value: bool, player_name: String) -> void:
 	if not is_host or not multiplayer.is_server():
 		_log_network("remote readiness rejected: receiver is not host")
 		return
 	var peer_id := multiplayer.get_remote_sender_id()
-	players[peer_id] = {"id": peer_id, "name": "Player %d" % peer_id, "ready": ready_value}
+	var normalized_name := player_name.strip_edges().left(MAX_PLAYER_NAME_LENGTH)
+	if normalized_name.is_empty():
+		normalized_name = player_display_name(peer_id)
+	players[peer_id] = {"id": peer_id, "name": normalized_name, "ready": ready_value}
 	_log_network("player readiness changed player=%d ready=%s" % [peer_id, str(ready_value).to_lower()])
 	_broadcast_players()
 
@@ -207,15 +226,15 @@ func _on_connected_to_server() -> void:
 	connection_state = "Connected"
 	_log_network("connected to host player=%d" % multiplayer.get_unique_id())
 	_set_status(connection_state)
-	players[multiplayer.get_unique_id()] = {"id": multiplayer.get_unique_id(), "name": "Player %d" % multiplayer.get_unique_id(), "ready": local_ready}
-	_submit_ready.rpc_id(1, local_ready)
+	players[multiplayer.get_unique_id()] = {"id": multiplayer.get_unique_id(), "name": local_player_name, "ready": local_ready}
+	_submit_ready.rpc_id(1, local_ready, local_player_name)
 	players_changed.emit(player_list())
 
 func _on_peer_connected(peer_id: int) -> void:
 	if not is_host:
 		return
 	_log_network("peer connected player=%d" % peer_id)
-	players[peer_id] = {"id": peer_id, "name": "Player %d" % peer_id, "ready": false}
+	players[peer_id] = {"id": peer_id, "name": "", "ready": false}
 	_broadcast_players()
 
 func _on_peer_disconnected(peer_id: int) -> void:

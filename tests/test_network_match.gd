@@ -3,6 +3,7 @@ extends McpTestSuite
 
 const TRADING_SESSION = preload("res://scripts/application/trading_session.gd")
 const GAME_STATE = preload("res://scripts/simulation/game_state.gd")
+const NETWORK_LOBBY = preload("res://scripts/application/network_lobby.gd")
 
 func suite_name() -> String:
 	return "network_match"
@@ -194,17 +195,32 @@ func test_host_ranking_uses_authoritative_portfolio_values() -> void:
 	remote_state.phase = GAME_STATE.Phase.COMPLETE
 	remote_state.cash_pence = 120_000
 	session.network_player_states = {1: session.game_state, 2: remote_state}
+	var lobby := NETWORK_LOBBY.new()
+	track(lobby)
+	lobby.players = {
+		1: {"id": 1, "name": "Morgan", "ready": true},
+		2: {"id": 2, "name": "Riley", "ready": true},
+	}
+	session.network_lobby = lobby
 	var rankings := session._network_rankings()
 	assert_eq(rankings.size(), 2)
 	assert_eq(rankings[0]["player_id"], 2)
 	assert_eq(rankings[0]["cash_pence"], 120_000)
 	assert_eq(rankings[0]["return_pence"], 20_000)
-	assert_eq(rankings[0]["display_name"], "PLAYER 2")
+	assert_eq(rankings[0]["display_name"], "Riley")
 	assert_eq(rankings[0]["risk_profile"], "HUMAN")
-	assert_eq(rankings[1]["display_name"], "You")
-	var client_rankings := session._network_rankings(2)
-	assert_eq(client_rankings[0]["display_name"], "You")
-	assert_eq(client_rankings[1]["display_name"], "PLAYER 1")
+	assert_eq(rankings[1]["display_name"], "Morgan")
+
+func test_lobby_uses_entered_names_and_hides_peer_ids() -> void:
+	var lobby := NETWORK_LOBBY.new()
+	track(lobby)
+	lobby.players = {
+		1: {"id": 1, "name": "Morgan", "ready": true},
+		123_984_756: {"id": 123_984_756, "name": "Riley", "ready": false},
+	}
+	var players := lobby.player_list()
+	assert_eq(players[0]["name"], "Morgan")
+	assert_eq(players[1]["name"], "Riley")
 
 func test_debrief_records_and_rankings_match_each_player_state() -> void:
 	var session: TradingSession = TRADING_SESSION.new()
@@ -216,6 +232,8 @@ func test_debrief_records_and_rankings_match_each_player_state() -> void:
 	session.game_state = GAME_STATE.new(42, 2)
 	session.market_simulator = MarketSimulator.new(42)
 	session.trade_service = TradeService.new()
+	session.network_lobby = NETWORK_LOBBY.new()
+	track(session.network_lobby)
 	session.game_state.phase = GAME_STATE.Phase.BRIEF
 	assert_true(session.market_simulator.start_trading(session.game_state))
 	var remote_state: GameState = GAME_STATE.new(42, 2)

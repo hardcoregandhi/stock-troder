@@ -54,13 +54,14 @@ try {
         "--round-seconds=$RoundSeconds",
         "--players=$Players"
     )
-    $hostArguments = $commonArguments + @("--role=host", "--report=$hostReport")
+    $hostArguments = $commonArguments + @("--role=host", "--name=Host", "--report=$hostReport")
     $hostProcess = Start-Process -FilePath $GodotBin -ArgumentList $hostArguments -WorkingDirectory $repo -RedirectStandardOutput $hostOutput -RedirectStandardError ($hostOutput + ".err") -PassThru
     $processes += $hostProcess
     [void]$hostProcess.WaitForInputIdle(1000)
 
     for ($clientIndex = 0; $clientIndex -lt $clientReports.Count; $clientIndex++) {
-        $clientArguments = $commonArguments + @("--role=client", "--report=$($clientReports[$clientIndex])")
+        $clientName = "Client$($clientIndex + 2)"
+        $clientArguments = $commonArguments + @("--role=client", "--name=$clientName", "--report=$($clientReports[$clientIndex])")
         $clientProcess = Start-Process -FilePath $GodotBin -ArgumentList $clientArguments -WorkingDirectory $repo -RedirectStandardOutput $clientOutputs[$clientIndex] -RedirectStandardError ($clientOutputs[$clientIndex] + ".err") -PassThru
         $processes += $clientProcess
     }
@@ -95,6 +96,21 @@ try {
     }
     if ($hostReportData.phase -ne "COMPLETE" -or @($clientReportData | Where-Object { $_.phase -ne "COMPLETE" }).Count -ne 0) {
         throw "Network harness did not reach COMPLETE. Logs: $runDirectory"
+    }
+    $expectedPlayerNames = @("Host")
+    for ($playerId = 2; $playerId -le $Players; $playerId++) {
+        $expectedPlayerNames += "Client$playerId"
+    }
+    $expectedPlayerNamesText = @($expectedPlayerNames | Sort-Object) -join "|"
+    $actualHostNames = @($hostReportData.player_names | Sort-Object) -join "|"
+    if ($actualHostNames -ne $expectedPlayerNamesText) {
+        throw "Host received unexpected player names. Expected: $expectedPlayerNamesText. Actual: $actualHostNames. Logs: $runDirectory"
+    }
+    foreach ($clientReport in $clientReportData) {
+        $actualClientNames = @($clientReport.player_names | Sort-Object) -join "|"
+        if ($actualClientNames -ne $expectedPlayerNamesText) {
+            throw "Client received unexpected player names. Expected: $expectedPlayerNamesText. Actual: $actualClientNames. Logs: $runDirectory"
+        }
     }
     if ($hostReportData.completed_rounds -ne $Days -or @($clientReportData | Where-Object { $_.completed_rounds -ne $Days }).Count -ne 0) {
         throw "Network harness completed the wrong number of rounds. Logs: $runDirectory"

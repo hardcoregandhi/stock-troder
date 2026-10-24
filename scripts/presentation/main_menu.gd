@@ -10,6 +10,7 @@ signal single_player_requested
 
 var content: VBoxContainer
 var network_lobby
+var player_name_input: LineEdit
 var address_input: LineEdit
 var port_input: SpinBox
 var lobby_status: Label
@@ -66,6 +67,22 @@ func _show_lobby() -> void:
 	content.add_child(_label("MULTIPLAYER LOBBY", 24, TEXT))
 	lobby_status = _label("Disconnected", 14, MUTED)
 	content.add_child(lobby_status)
+	var name_row := HBoxContainer.new()
+	name_row.custom_minimum_size.y = 42
+	name_row.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var name_label := _label("Name", 13, TEXT)
+	name_label.custom_minimum_size.x = 70
+	name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	name_row.add_child(name_label)
+	player_name_input = LineEdit.new()
+	player_name_input.text = network_lobby.local_player_name
+	player_name_input.placeholder_text = "Your name"
+	player_name_input.max_length = 20
+	player_name_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	player_name_input.custom_minimum_size.y = 36
+	player_name_input.text_changed.connect(network_lobby.set_player_name)
+	name_row.add_child(player_name_input)
+	content.add_child(name_row)
 	var address_row := HBoxContainer.new()
 	address_row.custom_minimum_size.y = 42
 	address_row.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -117,10 +134,12 @@ func _show_lobby() -> void:
 
 func _on_host() -> void:
 	_log_menu("action=host_requested")
+	network_lobby.set_player_name(player_name_input.text)
 	network_lobby.host(int(port_input.value))
 
 func _on_join() -> void:
 	_log_menu("action=join_requested")
+	network_lobby.set_player_name(player_name_input.text)
 	network_lobby.join(address_input.text, int(port_input.value))
 
 func _on_ready_pressed() -> void:
@@ -146,6 +165,8 @@ func _on_network_status_changed(status: String) -> void:
 		return
 	lobby_status.text = "Status: %s" % status
 	var connected: bool = network_lobby.is_lobby_connected()
+	if player_name_input != null:
+		player_name_input.editable = not connected
 	ready_button.disabled = not connected
 	ready_button.text = "READY" if not network_lobby.local_ready else "READY (ON)"
 	start_match_button.disabled = not network_lobby.is_host or not connected

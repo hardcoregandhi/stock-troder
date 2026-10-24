@@ -501,7 +501,7 @@ func _on_network_activity(player_id: int, activity_type: String, result: Diction
 	news_history.append({
 		"day": session.game_state.current_day,
 		"symbol": symbol,
-		"text": "PLAYER %d: %s" % [player_id, text],
+		"text": "%s: %s" % [session.network_player_display_name(player_id), text],
 		"resolved": false,
 		"change": 0.0,
 		"source": "NETWORK %s" % action,
@@ -1329,7 +1329,7 @@ func _on_run_completed(summary: Dictionary) -> void:
 	content.add_child(_label("RUN COMPLETE", 24, TEXT))
 	var winner_id := int(summary.get("victory_player_id", 0))
 	if winner_id > 0:
-		content.add_child(_label("MILLIONAIRE VICTORY: PLAYER %d" % winner_id, 15, POSITIVE))
+		content.add_child(_label("MILLIONAIRE VICTORY: %s" % session.network_player_display_name(winner_id), 15, POSITIVE))
 	content.add_child(_label("Starting cash: %s" % _format_pence(int(summary["starting_cash_pence"])), 14, TEXT))
 	content.add_child(_label("Final cash: %s" % _format_pence(int(summary["final_cash_pence"])), 16, TEXT))
 	var profit := int(summary["profit_loss_pence"])

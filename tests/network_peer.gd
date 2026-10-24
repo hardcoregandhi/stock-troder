@@ -4,6 +4,7 @@ const NETWORK_LOBBY = preload("res://scripts/application/network_lobby.gd")
 const TRADING_SESSION = preload("res://scripts/application/trading_session.gd")
 
 var role := ""
+var player_name := ""
 var port := 7000
 var run_seed := 42_4242
 var total_days := 3
@@ -39,6 +40,8 @@ func _parse_arguments() -> void:
 	for argument in OS.get_cmdline_user_args():
 		if argument.begins_with("--role="):
 			role = argument.trim_prefix("--role=")
+		elif argument.begins_with("--name="):
+			player_name = argument.trim_prefix("--name=")
 		elif argument.begins_with("--port="):
 			port = int(argument.trim_prefix("--port="))
 		elif argument.begins_with("--seed="):
@@ -66,6 +69,7 @@ func _start() -> void:
 	lobby.match_started.connect(_on_match_started)
 	lobby.match_state_received.connect(_on_match_state_received)
 	lobby.match_event_received.connect(_on_match_event_received)
+	lobby.set_player_name(player_name if not player_name.is_empty() else "Harness Player")
 	if role == "host":
 		if not lobby.host(port):
 			_finish(false, "Host could not bind port %d." % port)
@@ -169,6 +173,11 @@ func _finish(success: bool, message: String) -> void:
 		"stage": _stage(),
 		"pid": OS.get_process_id(),
 	}
+	if lobby != null:
+		var player_names: Array[String] = []
+		for player in lobby.player_list():
+			player_names.append(str(player.get("name", "")))
+		report["player_names"] = player_names
 	if session != null and session.game_state != null:
 		report["phase"] = GameState.Phase.keys()[session.game_state.phase]
 		report["day"] = session.game_state.current_day
