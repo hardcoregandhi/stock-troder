@@ -32,6 +32,7 @@ const DAY_LENGTH_SECONDS: float = 30.0
 const MARKET_SAMPLE_INTERVAL_SECONDS: float = 0.5
 const MILLIONAIRE_TARGET_PENCE: int = 100_000_000
 
+var day_length_seconds: float = DAY_LENGTH_SECONDS
 var game_state: GameState
 var market_simulator: MarketSimulator
 var trade_service: TradeService
@@ -245,7 +246,7 @@ func buy_put(symbol: String, quantity: int = 1) -> Dictionary:
 func option_time_remaining_ratio() -> float:
 	if day_timer == null or not day_timer.running:
 		return 1.0
-	return clampf(day_timer.seconds_remaining / DAY_LENGTH_SECONDS, 0.0, 1.0)
+	return clampf(day_timer.seconds_remaining / day_length_seconds, 0.0, 1.0)
 
 func _emit_option_result(result: Dictionary) -> void:
 	if bool(result.get("success", false)):
@@ -304,7 +305,7 @@ func start_trading_round() -> bool:
 		return false
 	if not market_simulator.start_trading(game_state):
 		return false
-	day_timer.start(DAY_LENGTH_SECONDS)
+	day_timer.start(day_length_seconds)
 	for player_state in computer_player_states.values():
 		player_state.phase = GameState.Phase.TRADING
 	if network_mode and network_is_host:
@@ -541,7 +542,7 @@ func _process(delta: float) -> void:
 	market_sample_elapsed += delta
 	while market_sample_elapsed >= MARKET_SAMPLE_INTERVAL_SECONDS:
 		market_sample_elapsed -= MARKET_SAMPLE_INTERVAL_SECONDS
-		var progress := 1.0 - (day_timer.seconds_remaining / DAY_LENGTH_SECONDS)
+		var progress := 1.0 - (day_timer.seconds_remaining / day_length_seconds)
 		market_simulator.update_live_prices(game_state, progress)
 		for news_event in market_simulator.last_intraday_events:
 			market_news_event.emit(news_event)
