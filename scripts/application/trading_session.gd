@@ -417,7 +417,7 @@ func _publish_network_state() -> void:
 		network_trading_ready_total = network_ready_players.size()
 		network_local_trading_ready = bool(network_ready_players.get(network_local_player_id, false))
 		network_readiness_changed.emit(network_trading_ready_count, network_trading_ready_total, network_local_trading_ready)
-		network_rankings = _network_rankings()
+		network_rankings = _network_rankings(int(player_id))
 		var market_snapshot := _network_market_snapshot()
 		market_snapshot["completed_rounds"] = network_completed_rounds.get(player_id, completed_rounds).duplicate(true)
 		market_snapshot["network_local_ready"] = bool(network_ready_players.get(player_id, false))
@@ -653,18 +653,23 @@ func _network_action_rejection(symbol: String, action: String) -> Dictionary:
 		"cost_pence": 0,
 	}
 
-func _network_rankings() -> Array[Dictionary]:
+func _network_rankings(viewer_player_id: int = -1) -> Array[Dictionary]:
 	var rankings: Array[Dictionary] = []
 	var states: Dictionary = network_player_states if network_mode and network_is_host else {network_local_player_id: game_state}
+	var ranking_viewer_id := network_local_player_id if viewer_player_id < 0 else viewer_player_id
 	if not network_mode:
 		for player_id in computer_player_states:
 			states[player_id] = computer_player_states[player_id]
 	for player_id in states:
 		var player_state: GameState = states[player_id]
+		var is_local_player := int(player_id) == network_local_player_id
+		var is_viewer := int(player_id) == ranking_viewer_id
+		var display_name := "You" if is_viewer else "PLAYER %d" % int(player_id) if network_mode else _computer_name(int(player_id))
+		var risk_profile := "HUMAN" if network_mode or is_local_player else _computer_profile(int(player_id))
 		rankings.append({
 			"player_id": int(player_id),
-			"display_name": "You" if int(player_id) == network_local_player_id else _computer_name(int(player_id)),
-			"risk_profile": "HUMAN" if int(player_id) == network_local_player_id else _computer_profile(int(player_id)),
+			"display_name": display_name,
+			"risk_profile": risk_profile,
 			"cash_pence": player_state.cash_pence,
 			"portfolio_value_pence": player_state.portfolio_value_pence(),
 			"return_pence": player_state.total_return_pence(),

@@ -199,6 +199,12 @@ func test_host_ranking_uses_authoritative_portfolio_values() -> void:
 	assert_eq(rankings[0]["player_id"], 2)
 	assert_eq(rankings[0]["cash_pence"], 120_000)
 	assert_eq(rankings[0]["return_pence"], 20_000)
+	assert_eq(rankings[0]["display_name"], "PLAYER 2")
+	assert_eq(rankings[0]["risk_profile"], "HUMAN")
+	assert_eq(rankings[1]["display_name"], "You")
+	var client_rankings := session._network_rankings(2)
+	assert_eq(client_rankings[0]["display_name"], "You")
+	assert_eq(client_rankings[1]["display_name"], "PLAYER 1")
 
 func test_debrief_records_and_rankings_match_each_player_state() -> void:
 	var session: TradingSession = TRADING_SESSION.new()
