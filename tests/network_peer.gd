@@ -94,10 +94,10 @@ func _on_match_started(player_ids: Array[int], host: bool) -> void:
 	add_child(session)
 	if host:
 		lobby.intent_received.connect(session.receive_network_intent)
-		session.round_length_seconds = round_seconds
+		session.day_length_seconds = round_seconds
 		session.start_network_host(lobby, player_ids, run_seed, total_days)
 	else:
-		session.round_length_seconds = round_seconds
+		session.day_length_seconds = round_seconds
 		session.start_network_client(lobby, lobby.multiplayer.get_unique_id())
 
 func _on_match_state_received(snapshot: Dictionary) -> void:
