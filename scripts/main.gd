@@ -22,6 +22,7 @@ func _ready() -> void:
 	_show_main_menu()
 
 func _show_main_menu() -> void:
+	print("[menu] flow=main_menu_opened")
 	get_tree().paused = false
 	if session != null:
 		session.queue_free()
@@ -37,6 +38,7 @@ func _show_main_menu() -> void:
 	menu.single_player_requested.connect(_start_single_player)
 
 func _start_single_player() -> void:
+	print("[menu] flow=single_player_started")
 	if menu != null:
 		menu.queue_free()
 		menu = null
@@ -52,6 +54,7 @@ func _start_single_player() -> void:
 	session.start_run()
 
 func _on_network_match_started(player_ids: Array[int], host: bool) -> void:
+	print("[menu] flow=multiplayer_match_started role=%s players=%d" % ["host" if host else "client", player_ids.size()])
 	if menu != null:
 		menu.queue_free()
 		menu = null
@@ -87,6 +90,7 @@ func _on_network_event_received(event: Dictionary) -> void:
 		session.apply_network_event(event)
 
 func _on_network_match_ended(_reason: String) -> void:
+	print("[menu] flow=multiplayer_match_ended")
 	if session != null:
 		network_lobby.disconnect_lobby()
 	_show_main_menu()

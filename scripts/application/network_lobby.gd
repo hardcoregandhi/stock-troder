@@ -31,9 +31,11 @@ func _ready() -> void:
 
 func host(port: int) -> bool:
 	_disconnect(false)
+	_log_network("host requested port=%d" % port)
 	_peer = ENetMultiplayerPeer.new()
 	var error := _peer.create_server(port, MAX_PLAYERS - 1)
 	if error != OK:
+		_log_network("host failed port=%d error=%s" % [port, error_string(error)])
 		_set_status("Host failed: %s" % error_string(error))
 		return false
 	multiplayer.multiplayer_peer = _peer
@@ -41,6 +43,7 @@ func host(port: int) -> bool:
 	local_ready = true
 	connection_state = "Connected as host"
 	players = {1: {"id": 1, "name": "Host", "ready": true}}
+	_log_network("host listening port=%d capacity=%d" % [port, MAX_PLAYERS])
 	status_changed.emit(connection_state)
 	players_changed.emit(player_list())
 	_start_upnp_mapping(port)
@@ -48,12 +51,15 @@ func host(port: int) -> bool:
 
 func join(address: String, port: int) -> bool:
 	_disconnect(false)
+	_log_network("join requested port=%d" % port)
 	if address.strip_edges().is_empty():
+		_log_network("join rejected: empty server address")
 		_set_status("Join failed: enter a server address.")
 		return false
 	_peer = ENetMultiplayerPeer.new()
 	var error := _peer.create_client(address.strip_edges(), port)
 	if error != OK:
+		_log_network("join failed port=%d error=%s" % [port, error_string(error)])
 		_set_status("Join failed: %s" % error_string(error))
 		return false
 	multiplayer.multiplayer_peer = _peer
@@ -66,8 +72,10 @@ func join(address: String, port: int) -> bool:
 
 func set_ready(ready_value: bool) -> void:
 	if not is_lobby_connected():
+		_log_network("ready change ignored: lobby is not connected")
 		return
 	local_ready = ready_value
+	_log_network("local readiness changed ready=%s" % str(ready_value).to_lower())
 	if is_host:
 		players[1]["ready"] = ready_value
 		_broadcast_players()
@@ -78,16 +86,20 @@ func set_ready(ready_value: bool) -> void:
 
 func request_start_match() -> void:
 	if not is_host:
+		_log_network("match start rejected: requester is not host")
 		match_start_status.emit("Only the host can start the match.")
 		return
 	if not is_lobby_connected() or players.is_empty():
+		_log_network("match start rejected: no connected players")
 		match_start_status.emit("Connect at least one player before starting.")
 		return
 	for player in players.values():
 		if not player["ready"]:
+			_log_network("match start rejected: players are not all ready")
 			match_start_status.emit("Every player must be ready before the host starts.")
 			return
 	match_active = true
+	_log_network("match starting players=%d" % players.size())
 	_match_started.rpc(player_ids())
 
 func player_ids() -> Array[int]:
@@ -156,20 +168,24 @@ func player_list() -> Array[Dictionary]:
 @rpc("any_peer", "reliable")
 func _submit_ready(ready_value: bool) -> void:
 	if not is_host or not multiplayer.is_server():
+		_log_network("remote readiness rejected: receiver is not host")
 		return
 	var peer_id := multiplayer.get_remote_sender_id()
 	players[peer_id] = {"id": peer_id, "name": "Player %d" % peer_id, "ready": ready_value}
+	_log_network("player readiness changed player=%d ready=%s" % [peer_id, str(ready_value).to_lower()])
 	_broadcast_players()
 
 @rpc("any_peer", "reliable")
 func _submit_intent(action: String, symbol: String, quantity: int) -> void:
 	if not is_host or not match_active or not multiplayer.is_server():
+		_log_network("remote action rejected: match is not accepting actions")
 		return
 	intent_received.emit(multiplayer.get_remote_sender_id(), action, symbol, quantity)
 
 @rpc("authority", "reliable", "call_local")
 func _match_started(network_players: Array[int]) -> void:
 	match_active = true
+	_log_network("match started role=%s players=%d" % ["host" if is_host else "client", network_players.size()])
 	match_started.emit(network_players, is_host)
 
 @rpc("authority", "reliable")
@@ -189,6 +205,7 @@ func _receive_players(network_players: Array[Dictionary]) -> void:
 
 func _on_connected_to_server() -> void:
 	connection_state = "Connected"
+	_log_network("connected to host player=%d" % multiplayer.get_unique_id())
 	_set_status(connection_state)
 	players[multiplayer.get_unique_id()] = {"id": multiplayer.get_unique_id(), "name": "Player %d" % multiplayer.get_unique_id(), "ready": local_ready}
 	_submit_ready.rpc_id(1, local_ready)
@@ -197,10 +214,12 @@ func _on_connected_to_server() -> void:
 func _on_peer_connected(peer_id: int) -> void:
 	if not is_host:
 		return
+	_log_network("peer connected player=%d" % peer_id)
 	players[peer_id] = {"id": peer_id, "name": "Player %d" % peer_id, "ready": false}
 	_broadcast_players()
 
 func _on_peer_disconnected(peer_id: int) -> void:
+	_log_network("peer disconnected player=%d" % peer_id)
 	players.erase(peer_id)
 	if is_host:
 		if match_active:
@@ -210,10 +229,12 @@ func _on_peer_disconnected(peer_id: int) -> void:
 		players_changed.emit(player_list())
 
 func _on_connection_failed() -> void:
+	_log_network("connection failed before lobby was established")
 	_disconnect(false)
 	_set_status("Connection failed")
 
 func _on_server_disconnected() -> void:
+	_log_network("host connection lost")
 	match_active = false
 	match_ended.emit("Host disconnected")
 	_disconnect(false)
@@ -256,11 +277,15 @@ func _complete_upnp_mapping(generation: int, success: bool, message: String) -> 
 	if generation != _upnp_generation or not is_host:
 		return
 	if success:
+		_log_network("upnp mapping ready: %s" % message)
 		status_changed.emit("Connected as host; UPnP %s" % message)
 	else:
+		_log_network("upnp mapping unavailable: %s" % message)
 		status_changed.emit("Connected as host; UPnP unavailable: %s" % message)
 
 func _disconnect(clear_status: bool) -> void:
+	if clear_status and _peer != null:
+		_log_network("lobby disconnected by local request")
 	_upnp_generation += 1
 	if _upnp_thread != null:
 		_upnp_thread.wait_to_finish()
@@ -276,3 +301,6 @@ func _disconnect(clear_status: bool) -> void:
 	if clear_status:
 		_set_status("Disconnected")
 		players_changed.emit(player_list())
+
+func _log_network(message: String) -> void:
+	print("[network] " + message)

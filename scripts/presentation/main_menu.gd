@@ -16,6 +16,8 @@ var lobby_status: Label
 var player_list_label: Label
 var ready_button: Button
 var start_match_button: Button
+var _last_lobby_state := ""
+var _last_lobby_player_count := -1
 
 func setup_network_lobby(lobby) -> void:
 	network_lobby = lobby
@@ -59,6 +61,7 @@ func _add_menu_actions() -> void:
 	content.add_child(_button("QUIT", _show_quit_confirmation))
 
 func _show_lobby() -> void:
+	_log_menu("screen=lobby_opened")
 	_clear_content()
 	content.add_child(_label("MULTIPLAYER LOBBY", 24, TEXT))
 	lobby_status = _label("Disconnected", 14, MUTED)
@@ -113,22 +116,32 @@ func _show_lobby() -> void:
 	_on_players_changed(network_lobby.player_list())
 
 func _on_host() -> void:
+	_log_menu("action=host_requested")
 	network_lobby.host(int(port_input.value))
 
 func _on_join() -> void:
+	_log_menu("action=join_requested")
 	network_lobby.join(address_input.text, int(port_input.value))
 
 func _on_ready_pressed() -> void:
-	network_lobby.set_ready(not network_lobby.local_ready)
+	var ready: bool = not network_lobby.local_ready
+	_log_menu("action=ready_toggled ready=%s" % str(ready).to_lower())
+	network_lobby.set_ready(ready)
 
 func _on_start_match() -> void:
+	_log_menu("action=start_match_requested")
 	network_lobby.request_start_match()
 
 func _on_lobby_back() -> void:
+	_log_menu("action=lobby_back")
 	network_lobby.disconnect_lobby()
 	_build_menu()
 
 func _on_network_status_changed(status: String) -> void:
+	var lobby_state := _lobby_state_label(status)
+	if lobby_state != _last_lobby_state:
+		_log_menu("lobby_status state=%s" % lobby_state)
+		_last_lobby_state = lobby_state
 	if lobby_status == null:
 		return
 	lobby_status.text = "Status: %s" % status
@@ -138,6 +151,9 @@ func _on_network_status_changed(status: String) -> void:
 	start_match_button.disabled = not network_lobby.is_host or not connected
 
 func _on_players_changed(players: Array[Dictionary]) -> void:
+	if players.size() != _last_lobby_player_count:
+		_log_menu("lobby_player_count=%d" % players.size())
+		_last_lobby_player_count = players.size()
 	if player_list_label == null:
 		return
 	if players.is_empty():
@@ -150,10 +166,12 @@ func _on_players_changed(players: Array[Dictionary]) -> void:
 	player_list_label.text = "\n".join(lines)
 
 func _on_match_start_status(message: String) -> void:
+	_log_menu("match_start_status=blocked")
 	if lobby_status != null:
 		lobby_status.text = message
 
 func _show_options() -> void:
+	_log_menu("screen=options_opened")
 	_clear_content()
 	content.add_child(_label("OPTIONS", 24, TEXT))
 	content.add_child(_label("Local display settings", 14, MUTED))
@@ -220,3 +238,19 @@ func _spacer(height: int) -> Control:
 	var spacer := Control.new()
 	spacer.custom_minimum_size.y = height
 	return spacer
+
+func _lobby_state_label(status: String) -> String:
+	if status.begins_with("Connected as host"):
+		return "connected_host"
+	if status.begins_with("Connecting to"):
+		return "connecting"
+	if status == "Connected":
+		return "connected_client"
+	if status.to_lower().contains("failed"):
+		return "failed"
+	if status.to_lower().contains("disconnected"):
+		return "disconnected"
+	return "updated"
+
+func _log_menu(event: String) -> void:
+	print("[menu] %s" % event)
