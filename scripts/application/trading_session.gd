@@ -48,6 +48,7 @@ var network_trading_ready_count: int = 0
 var network_trading_ready_total: int = 0
 var network_local_trading_ready: bool = false
 var network_rankings: Array[Dictionary] = []
+var network_completed_rounds: Dictionary = {}
 var completed_rounds: Array[Dictionary] = []
 var victory_player_id: int = 0
 var computer_players: Array[ComputerPlayer] = []
@@ -90,7 +91,12 @@ func _create_computer_players(run_seed: int) -> void:
 		computer_players.append(player)
 		computer_player_states[player_id] = state
 
-func start_network_host(lobby: NetworkLobby, player_ids: Array[int], run_seed: int = DEFAULT_SEED) -> void:
+func start_network_host(
+	lobby: NetworkLobby,
+	player_ids: Array[int],
+	run_seed: int = DEFAULT_SEED,
+	total_days: int = GameState.DEFAULT_TOTAL_DAYS
+) -> void:
 	network_lobby = lobby
 	network_mode = true
 	network_is_host = true
@@ -101,13 +107,15 @@ func start_network_host(lobby: NetworkLobby, player_ids: Array[int], run_seed: i
 	network_trading_ready_total = player_ids.size()
 	network_local_trading_ready = false
 	network_rankings.clear()
-	start_run(run_seed, GameState.DEFAULT_TOTAL_DAYS, GameState.DEFAULT_STOCK_COUNT, false)
+	network_completed_rounds.clear()
+	start_run(run_seed, total_days, GameState.DEFAULT_STOCK_COUNT, false)
 	for player_id in player_ids:
 		var player_state: GameState = game_state if player_id == network_local_player_id else GameState.create_default(run_seed, game_state.total_days)
 		player_state.stocks = game_state.stocks
 		player_state.phase = game_state.phase
 		network_player_states[player_id] = player_state
 		network_ready_players[player_id] = false
+		network_completed_rounds[player_id] = []
 	_publish_network_state()
 	if game_state != null and game_state.phase == GameState.Phase.BRIEF:
 		brief_started.emit(game_state.current_day, [], [])
@@ -354,7 +362,10 @@ func apply_network_snapshot(snapshot: Dictionary) -> void:
 	network_trading_ready_total = int(market.get("network_ready_total", 0))
 	network_local_trading_ready = bool(market.get("network_local_ready", false))
 	network_readiness_changed.emit(network_trading_ready_count, network_trading_ready_total, network_local_trading_ready)
-	completed_rounds = market.get("completed_rounds", []).duplicate(true)
+	completed_rounds.clear()
+	for round_record_value in market.get("completed_rounds", []):
+		if typeof(round_record_value) == TYPE_DICTIONARY:
+			completed_rounds.append(round_record_value.duplicate(true))
 	game_state.cash_pence = int(portfolio.get("cash_pence", game_state.cash_pence))
 	for symbol in game_state.holdings:
 		game_state.holdings[symbol] = int(portfolio.get("holdings", {}).get(symbol, 0))
@@ -404,6 +415,7 @@ func _publish_network_state() -> void:
 		network_readiness_changed.emit(network_trading_ready_count, network_trading_ready_total, network_local_trading_ready)
 		network_rankings = _network_rankings()
 		var market_snapshot := _network_market_snapshot()
+		market_snapshot["completed_rounds"] = network_completed_rounds.get(player_id, completed_rounds).duplicate(true)
 		market_snapshot["network_local_ready"] = bool(network_ready_players.get(player_id, false))
 		var packet := {"market": market_snapshot, "portfolio": _network_portfolio_snapshot(player_id), "players": network_rankings.duplicate(true)}
 		if player_id == network_local_player_id:
@@ -542,9 +554,14 @@ func _on_day_timer_timed_out() -> void:
 	var resolved_day := game_state.current_day
 	var resolutions := market_simulator.resolve_day(game_state)
 	var option_results := _settle_options(game_state)
+	var option_results_by_player: Dictionary = {}
 	if network_mode and network_is_host:
-		for player_state in network_player_states.values():
-			_settle_options(player_state)
+		option_results_by_player[network_local_player_id] = option_results
+		for player_id in network_player_states:
+			var player_state: GameState = network_player_states[player_id]
+			if player_state == game_state:
+				continue
+			option_results_by_player[player_id] = _settle_options(player_state)
 	for player_state in computer_player_states.values():
 		_settle_options(player_state)
 	var millionaire_player_id := _millionaire_player_id()
@@ -557,6 +574,13 @@ func _on_day_timer_timed_out() -> void:
 			player_state.phase = GameState.Phase.COMPLETE
 	var is_final_day := game_state.phase == GameState.Phase.COMPLETE
 	completed_rounds.append(_round_record(resolved_day, resolutions, option_results))
+	if network_mode and network_is_host:
+		for player_id in network_player_states:
+			var player_state: GameState = network_player_states[player_id]
+			var player_rounds: Array = network_completed_rounds.get(player_id, []).duplicate(true)
+			var player_options: Array = option_results_by_player.get(player_id, [])
+			player_rounds.append(round_resolution_service.round_record(player_state, resolved_day, resolutions, player_options))
+			network_completed_rounds[player_id] = player_rounds
 	if is_final_day:
 		trade_service.liquidate_all(game_state)
 	if network_mode and network_is_host:
@@ -568,6 +592,7 @@ func _on_day_timer_timed_out() -> void:
 		player_state.phase = game_state.phase
 		if is_final_day:
 			trade_service.liquidate_all(player_state)
+	network_rankings = _network_rankings()
 	day_resolved.emit(resolved_day, resolutions, state_snapshot())
 	if network_mode and network_is_host:
 		_publish_network_state()

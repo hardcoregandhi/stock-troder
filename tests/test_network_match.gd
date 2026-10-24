@@ -200,6 +200,39 @@ func test_host_ranking_uses_authoritative_portfolio_values() -> void:
 	assert_eq(rankings[0]["cash_pence"], 120_000)
 	assert_eq(rankings[0]["return_pence"], 20_000)
 
+func test_debrief_records_and_rankings_match_each_player_state() -> void:
+	var session: TradingSession = TRADING_SESSION.new()
+	track(session)
+	session._ready()
+	session.network_mode = true
+	session.network_is_host = true
+	session.network_local_player_id = 1
+	session.game_state = GAME_STATE.new(42, 2)
+	session.market_simulator = MarketSimulator.new(42)
+	session.trade_service = TradeService.new()
+	session.game_state.phase = GAME_STATE.Phase.BRIEF
+	assert_true(session.market_simulator.start_trading(session.game_state))
+	var remote_state: GameState = GAME_STATE.new(42, 2)
+	remote_state.stocks = session.game_state.stocks
+	remote_state.phase = GAME_STATE.Phase.TRADING
+	remote_state.cash_pence = 50_000
+	remote_state.holdings["AUR"] = 1
+	session.network_player_states = {1: session.game_state, 2: remote_state}
+	session.network_completed_rounds = {1: [], 2: []}
+
+	session._on_day_timer_timed_out()
+
+	var host_record: Dictionary = session.network_completed_rounds[1].back()
+	var remote_record: Dictionary = session.network_completed_rounds[2].back()
+	assert_eq(host_record["player_cash_pence"], session.game_state.cash_pence)
+	assert_eq(remote_record["player_cash_pence"], remote_state.cash_pence)
+	assert_eq(remote_record["player_portfolio_value_pence"], remote_state.portfolio_value_pence())
+	assert_ne(host_record["player_cash_pence"], remote_record["player_cash_pence"])
+	for ranking in session.network_rankings:
+		var player_state: GameState = session.network_player_states[ranking["player_id"]]
+		assert_eq(ranking["portfolio_value_pence"], player_state.portfolio_value_pence())
+		assert_eq(ranking["return_pence"], player_state.total_return_pence())
+
 func test_start_trading_waits_for_every_player_and_resets_readiness_after_start() -> void:
 	var session: TradingSession = TRADING_SESSION.new()
 	track(session)
