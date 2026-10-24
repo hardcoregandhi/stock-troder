@@ -59,9 +59,10 @@ func test_final_day_liquidates_holdings_and_emits_summary() -> void:
 	session.run_completed.connect(_on_run_completed)
 	session.start_run(7, 1)
 	assert_true(session.start_trading_round())
+	var dealt_aur := int(session.game_state.holdings["AUR"])
 	var buy_result: Dictionary = session.buy("AUR", 2)
 	assert_true(buy_result["success"])
-	assert_eq(session.game_state.holdings["AUR"], 2)
+	assert_eq(session.game_state.holdings["AUR"], dealt_aur + 2)
 	session._on_day_timer_timed_out()
 	assert_eq(session.game_state.phase, GAME_STATE.Phase.COMPLETE)
 	for stock in session.game_state.stocks:
@@ -73,7 +74,8 @@ func test_final_day_liquidates_holdings_and_emits_summary() -> void:
 	assert_true(last_summary.has("holdings"))
 	assert_true(last_summary.has("ranking"))
 	assert_eq(last_summary["holdings"]["AUR"], 0)
-	assert_eq(last_summary["ranking"][0]["return_pence"], last_summary["profit_loss_pence"])
+	var local_ranking: Array = last_summary["ranking"].filter(func(item: Dictionary) -> bool: return int(item["player_id"]) == session.network_local_player_id)
+	assert_eq(local_ranking[0]["return_pence"], last_summary["profit_loss_pence"])
 
 func test_non_final_resolution_contains_debrief_data() -> void:
 	var session: TradingSession = _new_session()

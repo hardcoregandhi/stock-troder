@@ -128,7 +128,8 @@ The simulation should use a seeded random number generator so a run can be repro
 The player begins with:
 
 - Cash: £1,000.
-- Shares: 0 in every stock.
+- Shares: a dealt home stake worth about £300 in one stock. See [euro-layer.md](euro-layer.md).
+- Role, two private goals, and a shared market-stability goal. See [euro-layer.md](euro-layer.md).
 - Trading fee: none for the first prototype.
 - Pump cost: **£25.00 (2,500 pence)** per use. This is 2.5% of the £1,000 starting cash, so it matters but does not block normal trading.
 
@@ -140,7 +141,7 @@ Rules:
 - Buying decreases cash immediately.
 - Selling increases cash immediately.
 - Portfolio value equals cash plus the market value of all holdings.
-- Final profit/loss equals final liquidation cash minus starting cash.
+- Final profit/loss equals final liquidation cash minus starting value. Starting value is starting cash plus the dealt home stake.
 
 A small transaction fee can be added after the basic loop works, but it should not obscure whether the market simulation is fun.
 
@@ -150,13 +151,13 @@ Pump is a single-player action available only during `TRADING`. It targets one s
 
 Sabotage is a single-player action available only during `TRADING`. It targets one stock, costs £50.00 immediately, and can be used once per stock per round. It applies -4% pressure to the live path. Resolution also applies a seeded downside of 6% in 65% of cases or 2% in the other cases. The price floor remains £1.00, and sabotage does not guarantee a gain for any portfolio.
 
-Plant Fake News is a single-player action available only during `TRADING`. It targets one stock, costs £75.00 immediately, and can be used once per stock per round. The player chooses positive or negative direction. The action shifts the target's projection and live-path weighting by 3%, and the feed labels the story `PLAYER-PLANTED FAKE`. At resolution, a seeded outcome has a 55% chance to work, a 25% chance to have no effect, and a 20% chance to backfire by applying a 4% movement opposite the chosen direction. It never guarantees price movement.
+Plant Fake News (HYPE/FUD) is available only during `TRADING`. It targets one stock, costs £75.00 immediately by default, and can be used once per stock per round. The player chooses positive or negative direction. The action shifts the target's projection and live-path weighting by 3% and publishes a believable headline. Other players see it as ordinary `COMPANY NEWS`; only the planter and Insiders know it is planted. At resolution, a seeded outcome has a 55% chance to work, a 25% chance to have no effect, and a 20% chance to backfire by applying a 4% movement opposite the chosen direction. Role and influence change cost, strength, and odds. See [euro-layer.md](euro-layer.md). It never guarantees price movement.
 
-Calls and puts are long, one-round contracts. A contract uses the stock's current price as its strike and costs a volatility-based premium that decreases as the round gets closer to expiry, with a £1.00 minimum. A call pays the positive difference between closing price and strike; a put pays the positive difference between strike and closing price. Premiums are paid immediately, contracts settle at resolution, and unused positions expire with no payout. Options do not provide leverage beyond the purchased quantity and do not allow margin or short selling.
+Calls and puts are long, one-round contracts. A contract uses the stock's current price as its strike and costs a volatility-based premium that decreases as the round gets closer to expiry, with a £1.00 minimum. Hedgie and Pension Fund roles change the premium. A call pays the positive difference between closing price and strike; a put pays the positive difference between strike and closing price. Premiums are paid immediately, contracts settle at resolution, and unused positions expire with no payout. Options do not provide leverage beyond the purchased quantity and do not allow margin or short selling.
 
 The player can see the cost, availability, and correction risk in the dashboard. Pump usage resets when the player selects **Next Day**. The debrief reports whether a Pump correction affected the resolved result.
 
-Sabotage and Fake News usage also reset when the player selects **Next Day**. Each manipulation also has a one-day per-stock cooldown. The debrief reports sabotage correction status and whether Fake News worked, failed, or backfired. Pump, Sabotage, HYPE, and FUD are host-validated in multiplayer and available to computer players through the same action service.
+Sabotage and Fake News usage also reset when the player selects **Next Day**. Each manipulation also has a one-day per-stock cooldown. The debrief reports sabotage correction status. Fake News outcomes show only to the planter and Insiders. Pump, Sabotage, HYPE, and FUD are host-validated in multiplayer and available to computer players through the same action service.
 
 ## 6. Information and UI
 

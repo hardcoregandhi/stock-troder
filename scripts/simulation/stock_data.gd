@@ -28,6 +28,11 @@ var sabotage_live_pressure: float = 0.0
 var fake_news_direction: int = 0
 var fake_news_projection_weight: float = 0.0
 var fake_news_active: bool = false
+var fake_news_success_chance: float = DEFAULT_FAKE_NEWS_SUCCESS_CHANCE
+var fake_news_backfire_chance: float = DEFAULT_FAKE_NEWS_BACKFIRE_CHANCE
+
+const DEFAULT_FAKE_NEWS_SUCCESS_CHANCE: float = 0.55
+const DEFAULT_FAKE_NEWS_BACKFIRE_CHANCE: float = 0.20
 
 func _init(
 	stock_symbol: String,
@@ -100,6 +105,8 @@ func set_projection(change: float, low: float, high: float, news: String, impact
 	fake_news_direction = 0
 	fake_news_projection_weight = 0.0
 	fake_news_active = false
+	fake_news_success_chance = DEFAULT_FAKE_NEWS_SUCCESS_CHANCE
+	fake_news_backfire_chance = DEFAULT_FAKE_NEWS_BACKFIRE_CHANCE
 	projection_change = change
 	projection_low = low
 	projection_high = high
@@ -129,12 +136,21 @@ func activate_sabotage(live_pressure: float) -> void:
 	sabotage_active = true
 	sabotage_live_pressure = live_pressure
 
-func activate_fake_news(direction: int, projection_weight: float, base_news: String) -> void:
-	fake_news_direction = clampi(direction, -1, 1)
-	fake_news_projection_weight = projection_weight
+# Later planters stack weight and set the odds used at resolution.
+func activate_fake_news(projection_weight: float, headline: String, success_chance: float = DEFAULT_FAKE_NEWS_SUCCESS_CHANCE, backfire_chance: float = DEFAULT_FAKE_NEWS_BACKFIRE_CHANCE) -> void:
+	fake_news_projection_weight += projection_weight
+	fake_news_direction = int(signf(fake_news_projection_weight))
+	fake_news_success_chance = success_chance
+	fake_news_backfire_chance = backfire_chance
 	fake_news_active = true
-	if current_news.is_empty():
-		current_news = base_news if not base_news.is_empty() else (str(news_events[0].get("text", "Market update")) if not news_events.is_empty() else "Market update")
+	if not headline.is_empty():
+		current_news = headline
+
+func planted_headline(direction: int) -> String:
+	for event in news_events:
+		if signf(float(event.get("impact", 0.0))) == signf(float(direction)):
+			return str(event.get("text", ""))
+	return "Analysts upgrade %s" % symbol if direction > 0 else "Analysts downgrade %s" % symbol
 
 func clear_pump() -> void:
 	pump_active = false
@@ -147,6 +163,8 @@ func clear_manipulation() -> void:
 	fake_news_direction = 0
 	fake_news_projection_weight = 0.0
 	fake_news_active = false
+	fake_news_success_chance = DEFAULT_FAKE_NEWS_SUCCESS_CHANCE
+	fake_news_backfire_chance = DEFAULT_FAKE_NEWS_BACKFIRE_CHANCE
 
 func graph_history_pence() -> Array[int]:
 	var history: Array[int] = []

@@ -37,6 +37,7 @@ var row_labels: Dictionary = {}
 var news_feed: VBoxContainer
 var news_filter: OptionButton
 var opponent_holdings_label: Label
+var plan_label: Label
 var news_history: Array[Dictionary] = []
 var pause_layer: Control
 var start_trading_button: Button
@@ -152,6 +153,8 @@ func setup(new_session: TradingSession) -> void:
 	session.fake_news_rejected.connect(_on_trade_result)
 	session.option_completed.connect(_on_trade_result)
 	session.option_rejected.connect(_on_trade_result)
+	session.research_completed.connect(_on_research_result)
+	session.research_rejected.connect(_on_research_result)
 	session.network_activity.connect(_on_network_activity)
 	session.market_news_event.connect(_on_market_news_event)
 	session.computer_action_completed.connect(_on_computer_action)
@@ -354,6 +357,13 @@ func _build_news_panel() -> Control:
 	opponent_holdings_label = _label("PLAYERS\nLoading portfolios...", 12, TEXT)
 	opponent_holdings_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	players_tab.add_child(opponent_holdings_label)
+	var plan_tab := VBoxContainer.new()
+	plan_tab.name = "PLAN"
+	plan_tab.add_theme_constant_override("separation", 8)
+	secondary_tabs.add_child(plan_tab)
+	plan_label = _label("", 11, TEXT)
+	plan_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	plan_tab.add_child(plan_label)
 	return panel
 
 func _panel() -> PanelContainer:
@@ -458,14 +468,26 @@ func _on_market_updated(_snapshot: Dictionary) -> void:
 
 func _on_day_resolved(day: int, resolutions: Array[Dictionary], _snapshot: Dictionary) -> void:
 	for resolution in resolutions:
+		var symbol := str(resolution["symbol"])
+		var planted_visible := bool(resolution.get("fake_news_used", false)) and _can_see_planted(symbol)
 		news_history.append({
 			"day": day,
-			"symbol": str(resolution["symbol"]),
+			"symbol": symbol,
 			"text": str(resolution["news"]),
 			"resolved": true,
 			"change": float(resolution["percentage_change"]),
-			"fake_news": bool(resolution.get("fake_news_used", false)),
-			"source": "MARKET NEWS" if bool(resolution.get("fake_news_used", false)) else "MARKET STORY",
+			"source": "PLANTED STORY %s" % str(resolution.get("fake_news_outcome", "")).to_upper() if planted_visible else "MARKET STORY",
+		})
+	if resolutions.any(func(item: Dictionary) -> bool: return bool(item.get("market_crash", false))):
+		var goal: Dictionary = session.game_state.cooperative_goal
+		news_history.append({
+			"day": day,
+			"symbol": str(goal.get("symbol", "")),
+			"text": "%s broke its floor. Every stock fell %d%%." % [str(goal.get("symbol", "")), roundi(float(goal.get("crash_percent", 0.0)) * 100.0)],
+			"resolved": true,
+			"change": -float(goal.get("crash_percent", 0.0)),
+			"source": "MARKET CRASH",
+			"color": NEGATIVE,
 		})
 	if news_history.size() > 18:
 		news_history = news_history.slice(news_history.size() - 18)
@@ -479,6 +501,24 @@ func _on_trade_result(result: Dictionary) -> void:
 	if bool(result.get("success", false)):
 		_append_action_news(result)
 	_refresh()
+
+func _on_research_result(result: Dictionary) -> void:
+	trade_feedback.text = str(result.get("message", ""))
+	trade_feedback.add_theme_color_override("font_color", POSITIVE if bool(result.get("success", false)) else NEGATIVE)
+	_refresh()
+	if brief_layer != null and session.game_state.phase == GameState.Phase.BRIEF:
+		brief_layer.free()
+		brief_layer = null
+		brief_panel = null
+		start_trading_button = null
+		_show_brief(session.game_state.current_day)
+
+func _quick_research(symbol: String) -> void:
+	session.buy_research(symbol)
+
+func _can_see_planted(symbol: String) -> bool:
+	var state: GameState = session.game_state
+	return bool(PlayerRole.value(state.role, "sees_planted_news")) or state.has_planted_fake_news(symbol)
 
 func _on_computer_action(player_name: String, risk_profile: String, result: Dictionary) -> void:
 	news_history.append({
@@ -512,13 +552,14 @@ func _on_network_activity(player_id: int, activity_type: String, result: Diction
 	_refresh()
 
 func _on_market_news_event(result: Dictionary) -> void:
+	var planted_direction := int(result.get("planted_direction", 0))
 	news_history.append({
 		"day": session.game_state.current_day,
 		"symbol": str(result.get("symbol", "")),
 		"text": str(result.get("news", "Market update")),
 		"resolved": false,
 		"change": float(result.get("impact", 0.0)),
-		"source": "COMPANY NEWS",
+		"source": "COMPANY NEWS" if planted_direction == 0 else "PLANTED %s" % ("HYPE" if planted_direction > 0 else "FUD"),
 		"color": _stock_color(str(result.get("symbol", ""))),
 	})
 	if news_history.size() > 24:
@@ -530,14 +571,13 @@ func _append_action_news(result: Dictionary) -> void:
 	var symbol := str(result.get("symbol", ""))
 	var text := str(result.get("message", ""))
 	if action == "fake_news":
-		text = "New market story reported for %s" % symbol
 		news_history.append({
 			"day": session.game_state.current_day,
 			"symbol": symbol,
-			"text": text,
+			"text": str(result.get("headline", "Market update")),
 			"resolved": false,
-			"change": 0.0,
-			"source": "MARKET NEWS",
+			"change": float(result.get("live_pressure", 0.0)),
+			"source": "YOUR %s" % ("HYPE" if int(result.get("direction", 0)) > 0 else "FUD"),
 			"color": _stock_color(symbol),
 		})
 		if news_history.size() > 24:
@@ -595,6 +635,42 @@ func _refresh() -> void:
 		_update_stock_rows(state)
 	_update_market_surface(state)
 	_update_opponent_holdings()
+	if plan_label != null:
+		plan_label.text = "\n\n".join(_plan_sections())
+
+# Left: role, influence, and personal goals. Right: shared market goal and research notes.
+func _plan_sections() -> Array[String]:
+	var state: GameState = session.game_state
+	var personal: Array[String] = [
+		"ROLE  %s" % PlayerRole.display_name(state.role).to_upper(),
+		"%s Drawback: %s" % [str(PlayerRole.value(state.role, "ability")), str(PlayerRole.value(state.role, "tradeoff"))],
+		"INFLUENCE  %d/%d  (credibility %d)  Boosts HYPE/FUD strength and odds." % [state.influence_level(), GameState.MAX_INFLUENCE_LEVEL, state.credibility],
+		"GOALS (paid at the final close)",
+	]
+	var results: Array[Dictionary] = state.goal_results if not state.goal_results.is_empty() else PlayerGoals.evaluate(state)
+	for goal in results:
+		personal.append("%s %s  %s  %s" % ["[x]" if bool(goal["complete"]) else "[ ]", str(goal["text"]), PlayerGoals.progress_text(goal, state), _signed_pence(int(goal["reward_pence"]))])
+	if results.is_empty():
+		personal.append("No goals dealt.")
+	var shared: Array[String] = ["MARKET STABILITY (shared)"]
+	var coop: Dictionary = state.cooperative_goal
+	if coop.is_empty():
+		shared.append("No shared goal this match.")
+	else:
+		var bellwether := state.get_stock(str(coop["symbol"]))
+		shared.append("%s now %s. A close below %s crashes every stock %d%%." % [str(coop["symbol"]), _format_pence(0 if bellwether == null else bellwether.current_price_pence), _format_pence(int(coop["floor_pence"])), roundi(float(coop["crash_percent"]) * 100.0)])
+		shared.append("Close the game at %s or higher: everyone gains %s.  Crashes so far: %d" % [_format_pence(int(coop["target_pence"])), _format_pence(int(coop["reward_pence"])), int(coop.get("crash_count", 0))])
+	shared.append("RESEARCH NOTES")
+	var notes := 0
+	for symbol in state.research_reports:
+		var report: Dictionary = state.research_reports[symbol]
+		if int(report["day"]) < state.current_day:
+			continue
+		shared.append("Day %d %s: %s (base %+.1f%%)" % [int(report["day"]), symbol, str(report["text"]), float(report["base_change"]) * 100.0])
+		notes += 1
+	if notes == 0:
+		shared.append("None. Buy research in the brief for %s." % _format_pence(GameState.RESEARCH_COST_PENCE))
+	return ["\n".join(personal), "\n".join(shared)]
 
 func _update_opponent_holdings() -> void:
 	if opponent_holdings_label == null:
@@ -762,13 +838,22 @@ func _update_stock_rows(state: GameState) -> void:
 		labels["sabotage"].tooltip_text = "ACTIVE: negative live pressure; resolution risk remains." if sabotage_active else "Spend £50.00 to add negative live pressure."
 		labels["sabotage"].disabled = not can_trade or sabotage_active or state.action_on_cooldown("sabotage", stock.symbol) or state.cash_pence < GameState.SABOTAGE_COST_PENCE
 		var fake_news_active := state.has_planted_fake_news(stock.symbol) and stock.fake_news_active
+		var fake_news_cost := TradeService.fake_news_cost_pence(state)
+		var can_plant := bool(PlayerRole.value(state.role, "can_plant_news"))
+		var fake_news_blocked := not can_trade or not can_plant or fake_news_active or state.action_on_cooldown("fake_news", stock.symbol) or state.cash_pence < fake_news_cost
+		var blocked_hint := "%s cannot plant HYPE/FUD." % PlayerRole.display_name(state.role)
+		var plant_hint := "Secretly plant a %s story for %s. Influence %d/%d."
+		var hype_hint := plant_hint % ["positive", _format_pence(fake_news_cost), state.influence_level(), GameState.MAX_INFLUENCE_LEVEL] if can_plant else blocked_hint
+		var fud_hint := plant_hint % ["negative", _format_pence(fake_news_cost), state.influence_level(), GameState.MAX_INFLUENCE_LEVEL] if can_plant else blocked_hint
 		labels["hype"].text = "HYPE ON" if fake_news_active and stock.fake_news_direction > 0 else "HYPE"
-		labels["hype"].tooltip_text = "ACTIVE: uncertain positive planted news." if fake_news_active and stock.fake_news_direction > 0 else "Plant uncertain positive news for £75.00."
-		labels["hype"].disabled = not can_trade or fake_news_active or state.action_on_cooldown("fake_news", stock.symbol) or state.cash_pence < GameState.FAKE_NEWS_COST_PENCE
+		labels["hype"].tooltip_text = "ACTIVE: your positive story is live." if fake_news_active and stock.fake_news_direction > 0 else hype_hint
+		labels["hype"].disabled = fake_news_blocked
 		labels["fud"].text = "FUD ON" if fake_news_active and stock.fake_news_direction < 0 else "FUD"
-		labels["fud"].tooltip_text = "ACTIVE: uncertain negative planted news." if fake_news_active and stock.fake_news_direction < 0 else "Plant uncertain negative news for £75.00."
-		labels["fud"].disabled = not can_trade or fake_news_active or state.action_on_cooldown("fake_news", stock.symbol) or state.cash_pence < GameState.FAKE_NEWS_COST_PENCE
-		var option_premium := TradeService.option_premium_pence(stock, session.option_time_remaining_ratio())
+		labels["fud"].tooltip_text = "ACTIVE: your negative story is live." if fake_news_active and stock.fake_news_direction < 0 else fud_hint
+		labels["fud"].disabled = fake_news_blocked
+		var option_premium := TradeService.option_premium_pence(stock, session.option_time_remaining_ratio(), state.role)
+		labels["call"].tooltip_text = "Buy a one-round call at the current price for %s." % _format_pence(option_premium)
+		labels["put"].tooltip_text = "Buy a one-round put at the current price for %s." % _format_pence(option_premium)
 		labels["call"].disabled = not can_trade or state.cash_pence < option_premium
 		labels["put"].disabled = not can_trade or state.cash_pence < option_premium
 
@@ -834,8 +919,9 @@ func _update_news_feed(state: GameState) -> void:
 				entries.append(forecast)
 	for entry in entries:
 		var color: Color = entry.get("color", NEGATIVE if float(entry["change"]) < 0.0 else POSITIVE)
-		var source := str(entry.get("source", "PLAYER-PLANTED FAKE" if bool(entry.get("fake_news", false)) else ("SIGNAL" if not bool(entry["resolved"]) else "MARKET STORY")))
-		var status := "RESOLVED %+.1f%%" % (float(entry["change"]) * 100.0) if bool(entry["resolved"]) else ("ACTIVITY" if source == "AI ACTION" or source.begins_with("NETWORK") else ("NEWS" if source == "COMPANY NEWS" or source == "MARKET NEWS" else "FORECAST"))
+		var source := str(entry.get("source", "SIGNAL" if not bool(entry["resolved"]) else "MARKET STORY"))
+		var is_story := source in ["COMPANY NEWS", "MARKET NEWS"] or source.begins_with("PLANTED") or source.begins_with("YOUR ")
+		var status := "RESOLVED %+.1f%%" % (float(entry["change"]) * 100.0) if bool(entry["resolved"]) else ("ACTIVITY" if source == "AI ACTION" or source.begins_with("NETWORK") else ("NEWS" if is_story else "FORECAST"))
 		news_feed.add_child(_build_feed_card(entry, status, source, color))
 
 func _has_feed_symbol(entries: Array[Dictionary], symbol: String) -> bool:
@@ -872,9 +958,9 @@ func _news_entry_matches_filter(entry: Dictionary) -> bool:
 		1:
 			return source == "PLAYER TRADE"
 		2:
-			return source in ["PUMP", "SABOTAGE", "FAKE_NEWS", "AI ACTION"] or source.begins_with("NETWORK")
+			return source in ["PUMP", "SABOTAGE", "AI ACTION", "YOUR HYPE", "YOUR FUD"] or source.begins_with("NETWORK")
 		3:
-			return not resolved and source not in ["PLAYER TRADE", "PUMP", "SABOTAGE", "FAKE_NEWS"]
+			return not resolved and source not in ["PLAYER TRADE", "PUMP", "SABOTAGE"]
 		4:
 			return resolved
 	return true
@@ -1086,6 +1172,10 @@ func _build_debrief_details_panel(resolutions: Array[Dictionary]) -> Control:
 		_format_pence(int(round_record.get("player_cash_pence", session.game_state.cash_pence))),
 	], 11, TEXT))
 	content.add_child(_label("Actions are paid, once per stock per round, and never guarantee a price result.", 10, MUTED))
+	var crashed := resolutions.any(func(item: Dictionary) -> bool: return bool(item.get("market_crash", false)))
+	if crashed:
+		content.add_child(_label("MARKET CRASH: %s broke its floor and every stock fell." % str(session.game_state.cooperative_goal.get("symbol", "")), 12, NEGATIVE))
+	content.add_child(_label("DIVIDEND  %s    INFLUENCE  %d/%d" % [_format_pence(int(round_record.get("player_dividend_pence", session.game_state.last_dividend_pence))), session.game_state.influence_level(), GameState.MAX_INFLUENCE_LEVEL], 11, ACCENT))
 	var result_grid := GridContainer.new()
 	result_grid.columns = 4
 	result_grid.add_theme_constant_override("h_separation", 7)
@@ -1116,8 +1206,8 @@ func _action_marker_text(resolution: Dictionary) -> String:
 		markers.append("PUMP CORRECTION" if bool(resolution.get("pump_correction", false)) else "PUMP USED")
 	if bool(resolution.get("sabotage_used", false)):
 		markers.append("SABOTAGE CORRECTION" if bool(resolution.get("sabotage_correction", false)) else "SABOTAGE USED")
-	if bool(resolution.get("fake_news_used", false)):
-		markers.append("FAKE NEWS %s" % str(resolution.get("fake_news_outcome", "failed")).to_upper())
+	if bool(resolution.get("fake_news_used", false)) and _can_see_planted(str(resolution.get("symbol", ""))):
+		markers.append("PLANTED STORY %s" % str(resolution.get("fake_news_outcome", "failed")).to_upper())
 	return ", ".join(markers) if not markers.is_empty() else "NONE"
 
 func _continue_after_debrief() -> void:
@@ -1177,6 +1267,7 @@ func _show_brief(day: int) -> void:
 	outlook_panel.size_flags_stretch_ratio = 1.0
 	upper.add_child(outlook_panel)
 	content.add_child(upper)
+	content.add_child(_build_brief_plan_row())
 	content.add_child(_label("YOUR HOLDINGS  |  CASH %s  |  %s" % [_format_pence(session.game_state.cash_pence), _holdings_text(session.game_state)], 13, TEXT))
 	content.add_child(_build_rankings_panel(rankings))
 	var action_bar := HBoxContainer.new()
@@ -1330,11 +1421,18 @@ func _on_run_completed(summary: Dictionary) -> void:
 	var winner_id := int(summary.get("victory_player_id", 0))
 	if winner_id > 0:
 		content.add_child(_label("MILLIONAIRE VICTORY: %s" % session.network_player_display_name(winner_id), 15, POSITIVE))
-	content.add_child(_label("Starting cash: %s" % _format_pence(int(summary["starting_cash_pence"])), 14, TEXT))
+	content.add_child(_label("Starting value (cash + dealt shares): %s" % _format_pence(int(summary.get("starting_value_pence", summary["starting_cash_pence"]))), 14, TEXT))
 	content.add_child(_label("Final cash: %s" % _format_pence(int(summary["final_cash_pence"])), 16, TEXT))
 	var profit := int(summary["profit_loss_pence"])
 	content.add_child(_label("Total return: %s" % _signed_pence(profit), 18, POSITIVE if profit >= 0 else NEGATIVE))
-	content.add_child(_label("Days completed: %d" % int(summary["days_completed"]), 13, MUTED))
+	content.add_child(_label("Days completed: %d    Role: %s" % [int(summary["days_completed"]), PlayerRole.display_name(str(summary.get("role", PlayerRole.NONE)))], 13, MUTED))
+	for goal in summary.get("goal_results", []):
+		var complete := bool(goal.get("complete", false))
+		content.add_child(_label("%s %s  %s" % ["GOAL MET" if complete else "GOAL MISSED", str(goal.get("text", "")), _signed_pence(int(goal.get("reward_pence", 0))) if complete else "no reward"], 13, POSITIVE if complete else MUTED))
+	var coop: Dictionary = summary.get("cooperative_goal", {})
+	if not coop.is_empty():
+		var coop_reward := int(summary.get("cooperative_reward_pence", 0))
+		content.add_child(_label("MARKET STABILITY %s: %s target %s, crashes %d  %s" % ["MET" if coop_reward > 0 else "MISSED", str(coop.get("symbol", "")), _format_pence(int(coop.get("target_pence", 0))), int(coop.get("crash_count", 0)), _signed_pence(coop_reward)], 13, POSITIVE if coop_reward > 0 else MUTED))
 	content.add_child(_label("Final holdings: %s" % _holdings_text_from_dictionary(summary.get("holdings", {})), 13, TEXT))
 	var final_rankings: Array = summary.get("ranking", [])
 	print("[ui] run_summary_values=%s" % JSON.stringify({
@@ -1462,23 +1560,37 @@ func _game_graph_series() -> Array[Dictionary]:
 		result.append(item)
 	return result
 
+func _build_brief_plan_row() -> Control:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	for section in _plan_sections():
+		var panel := _panel()
+		panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var text := _label(section, 11, TEXT)
+		text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		panel.add_child(text)
+		row.add_child(panel)
+	return row
+
 func _next_day_outlook() -> Control:
 	var panel := _panel()
 	var content := VBoxContainer.new()
 	content.add_child(_label("NEXT DAY STOCK STORIES / PROJECTIONS", 12, MUTED))
 	var grid := GridContainer.new()
-	grid.columns = 3
+	grid.columns = 4
 	grid.add_theme_constant_override("h_separation", 10)
 	grid.add_theme_constant_override("v_separation", 4)
 	for header in [
 		_column_label("STOCK", 70),
 		_column_label("STORY", 0),
 		_column_label("FORECAST", 150),
+		_column_label("TOMORROW", 150),
 	]:
 		header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		grid.add_child(header)
-	for stock_index in session.game_state.stocks.size():
-		var stock: StockData = session.game_state.stocks[stock_index]
+	var state: GameState = session.game_state
+	for stock_index in state.stocks.size():
+		var stock: StockData = state.stocks[stock_index]
 		var symbol := _label(stock.symbol, 11, StockData.color_for_index(stock_index))
 		symbol.custom_minimum_size.x = 70
 		grid.add_child(symbol)
@@ -1490,9 +1602,30 @@ func _next_day_outlook() -> Control:
 		var forecast := _label("%+.1f%%  |  %+.1f%% to %+.1f%%" % [stock.projection_change * 100.0, stock.projection_low * 100.0, stock.projection_high * 100.0], 11, POSITIVE if stock.projection_change >= 0.0 else NEGATIVE)
 		forecast.custom_minimum_size.x = 150
 		grid.add_child(forecast)
+		grid.add_child(_research_cell(state, stock))
 	content.add_child(grid)
 	panel.add_child(content)
 	return panel
+
+func _research_cell(state: GameState, stock: StockData) -> Control:
+	var report: Dictionary = state.research_reports.get(stock.symbol, {})
+	if int(report.get("day", 0)) == state.current_day + 1:
+		var base_change := float(report["base_change"])
+		var note := _label("%+.1f%%  %s" % [base_change * 100.0, str(report["text"])], 11, POSITIVE if base_change >= 0.0 else NEGATIVE)
+		note.custom_minimum_size.x = 150
+		note.clip_text = true
+		note.tooltip_text = "Day %d research: %s. Base forecast before momentum." % [int(report["day"]), str(report["text"])]
+		return note
+	if state.current_day >= state.total_days:
+		return _column_label("FINAL DAY", 150)
+	var button := Button.new()
+	button.text = "RESEARCH %s" % _format_pence(GameState.RESEARCH_COST_PENCE)
+	button.tooltip_text = "Pay to see Day %d's story and base forecast for %s. Private to you." % [state.current_day + 1, stock.symbol]
+	button.custom_minimum_size = Vector2(150, 24)
+	button.disabled = state.phase != GameState.Phase.BRIEF or state.cash_pence < GameState.RESEARCH_COST_PENCE
+	_style_action_button(button, ACCENT)
+	button.pressed.connect(_quick_research.bind(stock.symbol))
+	return button
 
 func _display_rankings() -> Array[Dictionary]:
 	if not session.network_rankings.is_empty():
@@ -1527,7 +1660,7 @@ func _build_rankings_panel(rankings: Array) -> Control:
 	for player in rankings:
 		for value in [
 			_label("%d" % rank, 10, TEXT),
-			_label("%s  [%s]" % [str(player.get("display_name", "PLAYER %s" % str(player.get("player_id", "?")))), str(player.get("risk_profile", "HUMAN"))], 10, TEXT),
+			_label("%s  [%s]" % [str(player.get("display_name", "PLAYER %s" % str(player.get("player_id", "?")))), _ranking_tag(player)], 10, TEXT),
 			_label(_format_pence(int(player.get("cash_pence", 0))), 10, TEXT),
 			_label(_format_pence(int(player.get("portfolio_value_pence", 0))), 10, TEXT),
 			_label(_signed_pence(int(player.get("return_pence", 0))), 10, POSITIVE if int(player.get("return_pence", 0)) >= 0 else NEGATIVE),
@@ -1539,6 +1672,13 @@ func _build_rankings_panel(rankings: Array) -> Control:
 	content.add_child(grid)
 	panel.add_child(content)
 	return panel
+
+func _ranking_tag(player: Dictionary) -> String:
+	var role_id := str(player.get("role", PlayerRole.NONE))
+	var profile := str(player.get("risk_profile", "HUMAN"))
+	if role_id == PlayerRole.NONE:
+		return profile
+	return PlayerRole.display_name(role_id).to_upper() if profile == "HUMAN" else "%s %s" % [profile, PlayerRole.display_name(role_id).to_upper()]
 
 func _stock_color(symbol: String) -> Color:
 	for index in session.game_state.stocks.size():

@@ -87,7 +87,7 @@ func test_client_snapshot_restores_round_chart_state() -> void:
 	assert_eq(client_stock.current_price_pence, 5_250)
 	assert_eq(client_stock.round_open_price_pence, 5_100)
 	assert_eq(client_stock.live_price_history_pence, [5_100, 5_180, 5_250])
-	assert_true(client.game_state.has_pumped("AUR"))
+	assert_false(client.game_state.has_pumped("AUR"))
 	assert_true(client_stock.pump_active)
 	assert_eq(client_stock.pump_live_boost, 0.04)
 

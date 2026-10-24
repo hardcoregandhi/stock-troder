@@ -18,9 +18,14 @@ const MAX_STOCK_COUNT: int = 6
 const PUMP_COST_PENCE: int = 2_500
 const SABOTAGE_COST_PENCE: int = 5_000
 const FAKE_NEWS_COST_PENCE: int = 7_500
+const RESEARCH_COST_PENCE: int = 3_000
 const MANIPULATION_COOLDOWN_DAYS: int = 1
+const CREDIBILITY_PER_LEVEL: int = 4
+const MAX_INFLUENCE_LEVEL: int = 5
+const CREDIBILITY_HELD_VALUE_STEP_PENCE: int = 25_000
 
 var starting_cash_pence: int = STARTING_CASH_PENCE
+var starting_value_pence: int = STARTING_CASH_PENCE
 var cash_pence: int = STARTING_CASH_PENCE
 var current_day: int = 1
 var total_days: int = DEFAULT_TOTAL_DAYS
@@ -33,6 +38,16 @@ var sabotaged_symbols: Dictionary = {}
 var fake_news_symbols: Dictionary = {}
 var manipulation_cooldowns: Dictionary = {}
 var stock_count: int = DEFAULT_STOCK_COUNT
+var role: String = PlayerRole.NONE
+var credibility: int = 0
+var home_symbol: String = ""
+var goals: Array[Dictionary] = []
+var goal_results: Array[Dictionary] = []
+var research_reports: Dictionary = {}
+var last_dividend_pence: int = 0
+var cooperative_reward_pence: int = 0
+# Shared market-stability goal; only the authoritative market state mutates it.
+var cooperative_goal: Dictionary = {}
 
 const TRADE_SERVICE = preload("res://scripts/application/trade_service.gd")
 
@@ -106,10 +121,26 @@ func reset_round_manipulations() -> void:
 		stock.clear_manipulation()
 
 func portfolio_value_pence() -> int:
-	var value := cash_pence
+	return cash_pence + held_share_value_pence()
+
+func held_share_value_pence() -> int:
+	var value := 0
 	for stock in stocks:
 		value += stock.current_price_pence * int(holdings[stock.symbol])
 	return value
 
 func total_return_pence() -> int:
-	return portfolio_value_pence() - starting_cash_pence
+	return portfolio_value_pence() - starting_value_pence
+
+func grant_starting_shares(symbol: String, quantity: int) -> void:
+	holdings[symbol] = int(holdings.get(symbol, 0)) + quantity
+	starting_value_pence = portfolio_value_pence()
+
+func influence_level() -> int:
+	return mini(MAX_INFLUENCE_LEVEL, credibility / CREDIBILITY_PER_LEVEL)
+
+func add_credibility_from_holdings() -> int:
+	var maximum := MAX_INFLUENCE_LEVEL * CREDIBILITY_PER_LEVEL
+	var gained := mini(held_share_value_pence() / CREDIBILITY_HELD_VALUE_STEP_PENCE, maximum - credibility)
+	credibility += maxi(0, gained)
+	return maxi(0, gained)

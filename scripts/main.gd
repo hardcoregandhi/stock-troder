@@ -37,8 +37,8 @@ func _show_main_menu() -> void:
 	menu.setup_network_lobby(network_lobby)
 	menu.single_player_requested.connect(_start_single_player)
 
-func _start_single_player() -> void:
-	print("[menu] flow=single_player_started")
+func _start_single_player(role_id: String = PlayerRole.NONE) -> void:
+	print("[menu] flow=single_player_started role=%s" % role_id)
 	if menu != null:
 		menu.queue_free()
 		menu = null
@@ -51,7 +51,7 @@ func _start_single_player() -> void:
 	add_child(dashboard)
 	dashboard.setup(session)
 	dashboard.exit_to_main_menu_requested.connect(_show_main_menu)
-	session.start_run()
+	session.start_run(TradingSession.DEFAULT_SEED, GameState.DEFAULT_TOTAL_DAYS, GameState.DEFAULT_STOCK_COUNT, true, role_id)
 
 func _on_network_match_started(player_ids: Array[int], host: bool) -> void:
 	print("[menu] flow=multiplayer_match_started role=%s players=%d" % ["host" if host else "client", player_ids.size()])

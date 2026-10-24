@@ -19,6 +19,8 @@ signal fake_news_completed(fake_news_result: Dictionary)
 signal fake_news_rejected(fake_news_result: Dictionary)
 signal option_completed(option_result: Dictionary)
 signal option_rejected(option_result: Dictionary)
+signal research_completed(research_result: Dictionary)
+signal research_rejected(research_result: Dictionary)
 signal computer_action_completed(player_name: String, risk_profile: String, action_result: Dictionary)
 signal day_resolved(day_number: int, resolution_result: Array[Dictionary], state_snapshot: Dictionary)
 signal run_completed(summary: Dictionary)
@@ -31,8 +33,10 @@ const DEFAULT_SEED: int = 42_4242
 const DAY_LENGTH_SECONDS: float = 30.0
 const MARKET_SAMPLE_INTERVAL_SECONDS: float = 0.5
 const MILLIONAIRE_TARGET_PENCE: int = 100_000_000
+const COMPUTER_ROLES := [PlayerRole.PENSION, PlayerRole.HEDGIE, PlayerRole.BELFORD]
 
 var day_length_seconds: float = DAY_LENGTH_SECONDS
+var local_role: String = PlayerRole.NONE
 var game_state: GameState
 var market_simulator: MarketSimulator
 var trade_service: TradeService
@@ -63,11 +67,16 @@ func _ready() -> void:
 	day_timer.time_updated.connect(_on_time_updated)
 	day_timer.timed_out.connect(_on_day_timer_timed_out)
 
-func start_run(run_seed: int = DEFAULT_SEED, run_total_days: int = GameState.DEFAULT_TOTAL_DAYS, stock_count: int = GameState.DEFAULT_STOCK_COUNT, include_computer_players: bool = true) -> void:
+func start_run(run_seed: int = DEFAULT_SEED, run_total_days: int = GameState.DEFAULT_TOTAL_DAYS, stock_count: int = GameState.DEFAULT_STOCK_COUNT, include_computer_players: bool = true, player_role: String = "") -> void:
 	if day_timer == null:
 		return
+	if not player_role.is_empty():
+		local_role = player_role
 	day_timer.stop()
 	game_state = GameState.create_default(run_seed, run_total_days, stock_count)
+	game_state.cooperative_goal = RunSetupService.cooperative_goal(game_state, run_seed)
+	if not network_mode:
+		RunSetupService.deal_starting_hand(game_state, run_seed, 0, local_role)
 	market_simulator = MarketSimulator.new(run_seed)
 	trade_service = TradeService.new()
 	market_sample_elapsed = 0.0
@@ -89,6 +98,7 @@ func _create_computer_players(run_seed: int) -> void:
 		var state: GameState = GameState.create_default(run_seed, game_state.total_days, game_state.stock_count)
 		state.stocks = game_state.stocks
 		state.phase = game_state.phase
+		RunSetupService.deal_starting_hand(state, run_seed, player_id, COMPUTER_ROLES[index])
 		computer_players.append(player)
 		computer_player_states[player_id] = state
 
@@ -110,10 +120,13 @@ func start_network_host(
 	network_rankings.clear()
 	network_completed_rounds.clear()
 	start_run(run_seed, total_days, GameState.DEFAULT_STOCK_COUNT, false)
-	for player_id in player_ids:
+	var roles := RunSetupService.network_roles(run_seed, player_ids.size())
+	for index in player_ids.size():
+		var player_id := player_ids[index]
 		var player_state: GameState = game_state if player_id == network_local_player_id else GameState.create_default(run_seed, game_state.total_days)
 		player_state.stocks = game_state.stocks
 		player_state.phase = game_state.phase
+		RunSetupService.deal_starting_hand(player_state, run_seed, index, roles[index])
 		network_player_states[player_id] = player_state
 		network_ready_players[player_id] = false
 		network_completed_rounds[player_id] = []
@@ -147,6 +160,8 @@ func receive_network_intent(peer_id: int, action: String, symbol: String, quanti
 		return _execute_network_option(peer_id, trade_service.buy_call(network_player_states[peer_id], symbol, quantity, option_time_remaining_ratio()))
 	elif action == "put":
 		return _execute_network_option(peer_id, trade_service.buy_put(network_player_states[peer_id], symbol, quantity, option_time_remaining_ratio()))
+	elif action == "research":
+		return _execute_network_research(peer_id, trade_service.buy_research(network_player_states[peer_id], symbol, _research_forecast(symbol)))
 	elif action == "ready_for_next_day":
 		_mark_network_player_ready(peer_id)
 	elif action == "ready_for_trading":
@@ -247,6 +262,28 @@ func option_time_remaining_ratio() -> float:
 	if day_timer == null or not day_timer.running:
 		return 1.0
 	return clampf(day_timer.seconds_remaining / day_length_seconds, 0.0, 1.0)
+
+func buy_research(symbol: String) -> Dictionary:
+	if network_mode and not network_is_host:
+		network_lobby.submit_research(symbol)
+		return {"success": true, "pending": true, "message": "Research request sent to host.", "symbol": symbol}
+	var result := trade_service.buy_research(game_state, symbol, _research_forecast(symbol))
+	if network_mode:
+		return _execute_network_research(network_local_player_id, result)
+	_emit_research_result(result)
+	return result
+
+func _research_forecast(symbol: String) -> Dictionary:
+	if market_simulator == null or game_state == null:
+		return {}
+	return market_simulator.next_day_forecast(game_state.get_stock(symbol))
+
+func _emit_research_result(result: Dictionary) -> void:
+	if bool(result.get("success", false)):
+		research_completed.emit(result)
+	else:
+		research_rejected.emit(result)
+	market_updated.emit(state_snapshot())
 
 func _emit_option_result(result: Dictionary) -> void:
 	if bool(result.get("success", false)):
@@ -370,9 +407,7 @@ func apply_network_snapshot(snapshot: Dictionary) -> void:
 	for round_record_value in market.get("completed_rounds", []):
 		if typeof(round_record_value) == TYPE_DICTIONARY:
 			completed_rounds.append(round_record_value.duplicate(true))
-	game_state.cash_pence = int(portfolio.get("cash_pence", game_state.cash_pence))
-	for symbol in game_state.holdings:
-		game_state.holdings[symbol] = int(portfolio.get("holdings", {}).get(symbol, 0))
+	NETWORK_SNAPSHOT_SERVICE.apply_portfolio_snapshot(game_state, portfolio)
 	network_rankings.clear()
 	for player in snapshot.get("players", []):
 		network_rankings.append(player.duplicate(true))
@@ -386,6 +421,14 @@ func apply_network_event(event: Dictionary) -> void:
 			network_activity.emit(int(event.get("player_id", 0)), "action", event["result"])
 		"option":
 			network_activity.emit(int(event.get("player_id", 0)), "option", event["result"])
+		"market_news":
+			market_news_event.emit(event["news"])
+		"private_result":
+			var private_result: Dictionary = event["result"]
+			if str(private_result.get("action", "")) == "research":
+				_emit_research_result(private_result)
+			else:
+				_emit_manipulation_result(private_result)
 		"day_resolved":
 			day_resolved.emit(int(event["day"]), event["resolutions"], state_snapshot())
 		"brief_started":
@@ -406,8 +449,7 @@ func _network_market_snapshot() -> Dictionary:
 	)
 
 func _network_portfolio_snapshot(player_id: int) -> Dictionary:
-	var state: GameState = network_player_states[player_id]
-	return {"cash_pence": state.cash_pence, "holdings": state.holdings.duplicate(), "portfolio_value_pence": state.portfolio_value_pence(), "return_pence": state.total_return_pence()}
+	return NETWORK_SNAPSHOT_SERVICE.portfolio_snapshot(network_player_states[player_id])
 
 func _publish_network_state() -> void:
 	if network_lobby == null or not network_is_host:
@@ -425,6 +467,9 @@ func _publish_network_state() -> void:
 		if player_id == network_local_player_id:
 			apply_network_snapshot(packet)
 		else:
+			var player_state: GameState = network_player_states[player_id]
+			if not _sees_planted_news(player_state):
+				NETWORK_SNAPSHOT_SERVICE.redact_planted_news(market_snapshot, player_state.fake_news_symbols)
 			network_lobby.send_match_state(packet, player_id)
 
 func _execute_network_trade(player_id: int, result: Dictionary) -> Dictionary:
@@ -437,6 +482,8 @@ func _execute_network_trade(player_id: int, result: Dictionary) -> Dictionary:
 	return result
 
 func _execute_network_manipulation(player_id: int, result: Dictionary) -> Dictionary:
+	if str(result.get("action", "")) == "fake_news":
+		return _execute_network_private_result(player_id, result, bool(result.get("success", false)))
 	if player_id == network_local_player_id:
 		_emit_manipulation_result(result)
 	else:
@@ -453,6 +500,55 @@ func _execute_network_option(player_id: int, result: Dictionary) -> Dictionary:
 	_broadcast_network_activity(player_id, "option", result)
 	_publish_network_state()
 	return result
+
+func _execute_network_research(player_id: int, result: Dictionary) -> Dictionary:
+	return _execute_network_private_result(player_id, result, false)
+
+# Publishes state before the private reply so the actor's screen already holds the new notes.
+func _execute_network_private_result(player_id: int, result: Dictionary, announce_story: bool) -> Dictionary:
+	_publish_network_state()
+	if player_id == network_local_player_id:
+		if str(result.get("action", "")) == "research":
+			_emit_research_result(result)
+		else:
+			_emit_manipulation_result(result)
+	elif network_lobby != null:
+		network_lobby.send_match_event({"type": "private_result", "result": result}, player_id)
+	if announce_story:
+		_announce_story(player_id, result)
+	return result
+
+# Planted stories reach other players as ordinary company news; only Insiders see the tag.
+func _announce_story(actor_id: int, result: Dictionary) -> void:
+	var story := {
+		"symbol": str(result.get("symbol", "")),
+		"news": str(result.get("headline", "Market update")),
+		"impact": float(result.get("live_pressure", 0.0)),
+		"source": "COMPANY NEWS",
+	}
+	var tagged := story.duplicate()
+	tagged["planted_direction"] = int(result.get("direction", 0))
+	if actor_id != network_local_player_id:
+		market_news_event.emit(tagged if _sees_planted_news(game_state) else story)
+	if not network_mode or not network_is_host or network_lobby == null:
+		return
+	for recipient_id in network_player_states:
+		if recipient_id == network_local_player_id or recipient_id == actor_id:
+			continue
+		var visible_story := tagged if _sees_planted_news(network_player_states[recipient_id]) else story
+		network_lobby.send_match_event({"type": "market_news", "news": visible_story}, recipient_id)
+
+func _sees_planted_news(state: GameState) -> bool:
+	return state != null and bool(PlayerRole.value(state.role, "sees_planted_news"))
+
+func _all_player_states() -> Array[GameState]:
+	var states: Array[GameState] = [game_state]
+	for player_state in network_player_states.values():
+		if not states.has(player_state):
+			states.append(player_state)
+	for player_state in computer_player_states.values():
+		states.append(player_state)
+	return states
 
 func _broadcast_network_activity(player_id: int, activity_type: String, result: Dictionary) -> void:
 	if network_lobby == null:
@@ -537,7 +633,10 @@ func _process(delta: float) -> void:
 		var computer_state: GameState = computer_player_states[computer_player.player_id]
 		var action_result := computer_player.tick(delta, computer_state, trade_service, option_time_remaining_ratio())
 		if not action_result.is_empty() and bool(action_result.get("success", false)):
-			computer_action_completed.emit(computer_player.display_name, computer_player.risk_profile, action_result)
+			if str(action_result.get("action", "")) == "fake_news":
+				_announce_story(computer_player.player_id, action_result)
+			else:
+				computer_action_completed.emit(computer_player.display_name, computer_player.risk_profile, action_result)
 			network_rankings = _network_rankings()
 	market_sample_elapsed += delta
 	while market_sample_elapsed >= MARKET_SAMPLE_INTERVAL_SECONDS:
@@ -569,6 +668,8 @@ func _on_day_timer_timed_out() -> void:
 			option_results_by_player[player_id] = _settle_options(player_state)
 	for player_state in computer_player_states.values():
 		_settle_options(player_state)
+	for player_state in _all_player_states():
+		round_resolution_service.apply_close_effects(player_state)
 	var millionaire_player_id := _millionaire_player_id()
 	if millionaire_player_id > 0:
 		victory_player_id = millionaire_player_id
@@ -578,13 +679,16 @@ func _on_day_timer_timed_out() -> void:
 		for player_state in computer_player_states.values():
 			player_state.phase = GameState.Phase.COMPLETE
 	var is_final_day := game_state.phase == GameState.Phase.COMPLETE
+	if is_final_day:
+		for player_state in _all_player_states():
+			round_resolution_service.score_final_goals(player_state, game_state.cooperative_goal)
 	completed_rounds.append(_round_record(resolved_day, resolutions, option_results))
 	if network_mode and network_is_host:
 		for player_id in network_player_states:
 			var player_state: GameState = network_player_states[player_id]
 			var player_rounds: Array = network_completed_rounds.get(player_id, []).duplicate(true)
 			var player_options: Array = option_results_by_player.get(player_id, [])
-			player_rounds.append(round_resolution_service.round_record(player_state, resolved_day, resolutions, player_options))
+			player_rounds.append(round_resolution_service.round_record(player_state, resolved_day, _visible_resolutions(player_state, resolutions), player_options))
 			network_completed_rounds[player_id] = player_rounds
 	if is_final_day:
 		trade_service.liquidate_all(game_state)
@@ -603,7 +707,7 @@ func _on_day_timer_timed_out() -> void:
 		_publish_network_state()
 		for player_id in network_player_states:
 			if player_id != network_local_player_id:
-				network_lobby.send_match_event({"type": "day_resolved", "day": resolved_day, "resolutions": resolutions}, player_id)
+				network_lobby.send_match_event({"type": "day_resolved", "day": resolved_day, "resolutions": _visible_resolutions(network_player_states[player_id], resolutions)}, player_id)
 	if is_final_day:
 		_emit_run_completed()
 		if network_mode and network_is_host:
@@ -614,6 +718,11 @@ func _on_day_timer_timed_out() -> void:
 
 func _on_time_updated(seconds_remaining: float) -> void:
 	time_updated.emit(seconds_remaining)
+
+func _visible_resolutions(state: GameState, resolutions: Array[Dictionary]) -> Array[Dictionary]:
+	if _sees_planted_news(state):
+		return resolutions
+	return NETWORK_SNAPSHOT_SERVICE.redact_resolutions(resolutions, state.fake_news_symbols)
 
 func _execute_trade(trade_result: Dictionary) -> Dictionary:
 	if trade_result["success"]:
@@ -628,10 +737,15 @@ func _emit_run_completed() -> void:
 func _run_summary_for(state: GameState) -> Dictionary:
 	return {
 		"starting_cash_pence": state.starting_cash_pence,
+		"starting_value_pence": state.starting_value_pence,
 		"final_cash_pence": state.cash_pence,
-		"profit_loss_pence": state.cash_pence - state.starting_cash_pence,
+		"profit_loss_pence": state.cash_pence - state.starting_value_pence,
 		"days_completed": state.total_days,
 		"holdings": state.holdings.duplicate(),
+		"role": state.role,
+		"goal_results": state.goal_results.duplicate(true),
+		"cooperative_goal": game_state.cooperative_goal.duplicate(),
+		"cooperative_reward_pence": state.cooperative_reward_pence,
 		"ranking": _network_rankings(),
 		"victory_player_id": victory_player_id,
 		"completed_rounds": completed_rounds.duplicate(true),
@@ -668,6 +782,7 @@ func _network_rankings() -> Array[Dictionary]:
 			"player_id": int(player_id),
 			"display_name": display_name,
 			"risk_profile": risk_profile,
+			"role": player_state.role,
 			"cash_pence": player_state.cash_pence,
 			"portfolio_value_pence": player_state.portfolio_value_pence(),
 			"return_pence": player_state.total_return_pence(),

@@ -6,7 +6,7 @@ const PANEL := Color("182733")
 const TEXT := Color("edf4f6")
 const MUTED := Color("9bb0b8")
 
-signal single_player_requested
+signal single_player_requested(role_id: String)
 
 var content: VBoxContainer
 var network_lobby
@@ -56,7 +56,7 @@ func _add_menu_actions() -> void:
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	content.add_child(subtitle)
 	content.add_child(_spacer(10))
-	content.add_child(_button("SINGLE PLAYER", _on_single_player))
+	content.add_child(_button("SINGLE PLAYER", _show_role_picker))
 	content.add_child(_button("MULTIPLAYER", _show_lobby))
 	content.add_child(_button("OPTIONS", _show_options))
 	content.add_child(_button("QUIT", _show_quit_confirmation))
@@ -226,9 +226,22 @@ func _show_quit_confirmation() -> void:
 	content.add_child(_button("CONFIRM QUIT", _confirm_quit))
 	content.add_child(_button("CANCEL", _cancel_quit_confirmation))
 
-func _on_single_player() -> void:
-	_log_menu("action=single_player_requested")
-	single_player_requested.emit()
+func _show_role_picker() -> void:
+	_log_menu("screen=role_picker_opened")
+	_clear_content()
+	content.add_child(_label("CHOOSE YOUR ROLE", 24, TEXT))
+	content.add_child(_label("Each role has one strength and one drawback.", 13, MUTED))
+	for role_id in PlayerRole.PLAYABLE:
+		var button := _button(PlayerRole.display_name(role_id).to_upper(), _on_single_player.bind(role_id))
+		button.tooltip_text = PlayerRole.summary(role_id)
+		content.add_child(button)
+		content.add_child(_label("%s Drawback: %s" % [str(PlayerRole.value(role_id, "ability")), str(PlayerRole.value(role_id, "tradeoff"))], 11, MUTED))
+	content.add_child(_spacer(8))
+	content.add_child(_button("BACK", _build_menu))
+
+func _on_single_player(role_id: String) -> void:
+	_log_menu("action=single_player_requested role=%s" % role_id)
+	single_player_requested.emit(role_id)
 
 func _confirm_quit() -> void:
 	_log_menu("action=quit_confirmed")

@@ -137,6 +137,9 @@ func submit_call(symbol: String) -> void:
 func submit_put(symbol: String) -> void:
 	_submit_intent.rpc_id(1, "put", symbol, 1)
 
+func submit_research(symbol: String) -> void:
+	_submit_intent.rpc_id(1, "research", symbol, 0)
+
 func submit_ready_for_next_day() -> void:
 	_submit_intent.rpc_id(1, "ready_for_next_day", "", 0)
 

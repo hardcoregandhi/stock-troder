@@ -221,7 +221,19 @@ Phase 1 has no transaction fee, but the result structure should leave room for o
 
 #### Sabotage, Fake News, and Options boundary
 
-`TradeService.sabotage(state, symbol)` validates `TRADING`, the target stock, one use per stock, cooldown, and the 5,000 pence cost. It marks the target and applies -4% live pressure. `TradeService.plant_fake_news(state, symbol, direction)` validates the same phase, target, one-use rule, cooldown, positive or negative direction, and the 7,500 pence cost. It updates the target projection weighting and labels its news as player-planted fake. `MarketSimulator` owns the seeded correction, failure, and backfire rolls. `TradingSession` emits structured action results and records all action markers in the debrief. Network manipulation requests are validated by the host before any remote portfolio changes. `OptionContract` stores long CALL and PUT positions with current-price strikes, integer-pence premiums, and one-round intrinsic-value settlement. AI and network portfolios use the same `TradeService` and settlement path.
+`TradeService.sabotage(state, symbol)` validates `TRADING`, the target stock, one use per stock, cooldown, and the 5,000 pence cost. It marks the target and applies -4% live pressure. `TradeService.plant_fake_news(state, symbol, direction)` validates the same phase, target, one-use rule, cooldown, positive or negative direction, and the role-based cost. It updates the target projection weighting and publishes a matching headline. `TradingSession` announces another player's planted story as ordinary company news, and `NetworkSnapshotService` removes planted-story data from client snapshots and resolutions unless the client planted it or is an Insider. `MarketSimulator` owns the seeded correction, failure, and backfire rolls. `TradingSession` emits structured action results and records all action markers in the debrief. Network manipulation requests are validated by the host before any remote portfolio changes. `OptionContract` stores long CALL and PUT positions with current-price strikes, integer-pence premiums, and one-round intrinsic-value settlement. AI and network portfolios use the same `TradeService` and settlement path.
+
+#### Eurogame layer boundary
+
+Rules are in [euro-layer.md](euro-layer.md).
+
+- `PlayerRole` (simulation) holds role values as data. Rules read them with `PlayerRole.value(role, key)`.
+- `PlayerGoals` (simulation) deals, tracks, and evaluates personal goals.
+- `GameState` stores role, credibility, home stake, starting value, goals, research notes, and the shared `cooperative_goal`.
+- `RunSetupService` deals roles, home stakes, goals, and the bellwether from the run seed. It uses its own random streams.
+- `MarketSimulator` rolls next-day forecasts one day ahead on a separate stream, and applies market crashes.
+- `RoundResolutionService` pays dividends, adds credibility at each close, and pays goals before the final liquidation.
+- `TradeService.buy_research` sells next-day notes. Research results are private in multiplayer.
 
 ### `TradingSession`
 

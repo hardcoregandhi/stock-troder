@@ -122,7 +122,7 @@ func test_fake_news_costs_seventy_five_pounds_preserves_direction_and_is_once_pe
 	assert_eq(result["cost_pence"], 7_500)
 	assert_eq(state.cash_pence, 92_500)
 	assert_eq(state.get_stock("AUR").fake_news_direction, -1)
-	assert_eq(state.get_stock("AUR").current_news, "Prototype demonstration draws attention")
+	assert_eq(state.get_stock("AUR").current_news, "Manufacturing costs rise unexpectedly")
 	assert_false(service.plant_fake_news(state, "AUR", 1)["success"])
 
 func test_fake_news_rejects_brief_without_charging_cash() -> void:

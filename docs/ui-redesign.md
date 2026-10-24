@@ -173,12 +173,13 @@ ROUND 3  CYN  New energy contract announced
 Resolved: +12.4%
 ```
 
-Player-planted stories use a separate source label. Current action and network
-events should remain distinguishable from market signals:
+Planted stories are secret. Other players see them as ordinary company news.
+The planter sees `YOUR HYPE` or `YOUR FUD`. Insiders see `PLANTED HYPE` or
+`PLANTED FUD`:
 
 ```text
-ROUND 3  CYN  FORECAST
-PLAYER-PLANTED FAKE: New energy contract announced
+ROUND 3  CYN  NEWS
+COMPANY NEWS  New energy contract announced
 ```
 
 The feed should not reveal the exact future price before resolution.

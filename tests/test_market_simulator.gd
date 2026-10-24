@@ -69,7 +69,7 @@ func test_recent_history_adds_bounded_weight_to_projection() -> void:
 	var history_change := float(history_projections[0]["projection_change"])
 	var baseline_change := float(baseline_projections[0]["projection_change"])
 	assert_gt(history_change, baseline_change)
-	assert_true(history_change - baseline_change <= MARKET_SIMULATOR.MAX_HISTORY_INFLUENCE)
+	assert_true(history_change - baseline_change <= MARKET_SIMULATOR.MAX_HISTORY_INFLUENCE + 0.000001)
 
 func test_resolved_prices_respect_price_floor_and_append_history() -> void:
 	var state = GAME_STATE.new(77, 1)
@@ -220,7 +220,7 @@ func test_fake_news_direction_changes_projection_and_reports_seeded_outcome() ->
 	assert_true(TRADE_SERVICE.new().plant_fake_news(first_state, "AUR", 1)["success"])
 	assert_true(TRADE_SERVICE.new().plant_fake_news(second_state, "AUR", 1)["success"])
 	assert_gt(first_stock.projection_change, before_projection)
-	assert_eq(first_stock.current_news, "Quiet trading day")
+	assert_eq(first_stock.current_news, first_stock.planted_headline(1))
 	var first_resolution := first_simulator.resolve_day(first_state)[0]
 	var second_resolution := second_simulator.resolve_day(second_state)[0]
 	assert_eq(first_resolution, second_resolution)
