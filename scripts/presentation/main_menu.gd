@@ -186,18 +186,25 @@ func _show_options() -> void:
 	content.add_child(_button("BACK", _build_menu))
 
 func _show_quit_confirmation() -> void:
+	_log_menu("screen=quit_confirmation_opened")
 	_clear_content()
 	content.add_child(_label("QUIT STOCKTRODER?", 24, TEXT))
 	content.add_child(_label("Your current run will be closed.", 14, MUTED))
 	content.add_child(_spacer(12))
 	content.add_child(_button("CONFIRM QUIT", _confirm_quit))
-	content.add_child(_button("CANCEL", _build_menu))
+	content.add_child(_button("CANCEL", _cancel_quit_confirmation))
 
 func _on_single_player() -> void:
+	_log_menu("action=single_player_requested")
 	single_player_requested.emit()
 
 func _confirm_quit() -> void:
+	_log_menu("action=quit_confirmed")
 	get_tree().quit()
+
+func _cancel_quit_confirmation() -> void:
+	_log_menu("action=quit_cancelled")
+	_build_menu()
 
 func _clear_content() -> void:
 	for child in content.get_children():
