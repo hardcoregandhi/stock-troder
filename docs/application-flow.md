@@ -36,8 +36,11 @@ Phase 1 options should be small and useful:
 - Window mode.
 - Display scale.
 - Round length for local testing only, if it does not affect normal scoring.
+- Open the local runtime log folder for player bug reports.
 
 Options should be stored locally. Do not add accounts or online settings yet.
+
+Each game process writes a separate `session-<timestamp>-<process-id>.log` in its Godot user data folder under `logs`, so concurrent clients do not overwrite one another. Options shows the active session's filename and opens the folder. Players can attach the relevant session log to a bug report. Logs stay on the player's device unless they choose to share them.
 
 ### Quit
 

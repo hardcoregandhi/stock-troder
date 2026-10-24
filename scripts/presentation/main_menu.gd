@@ -182,8 +182,19 @@ func _show_options() -> void:
 	window_mode.tooltip_text = "Display settings will be connected in a later phase."
 	content.add_child(window_mode)
 	content.add_child(_label("These settings are placeholders and do not change game rules.", 12, MUTED))
+	content.add_child(_button("OPEN LOG FOLDER", _open_log_folder))
+	content.add_child(_label("This session: %s" % RuntimeLog.session_log_filename(), 11, MUTED))
+	content.add_child(_label(RuntimeLog.log_directory_path(), 11, MUTED))
 	content.add_child(_spacer(12))
-	content.add_child(_button("BACK", _build_menu))
+	content.add_child(_button("BACK", _on_options_back))
+
+func _on_options_back() -> void:
+	_log_menu("action=options_back")
+	_build_menu()
+
+func _open_log_folder() -> void:
+	var error := OS.shell_open(RuntimeLog.log_directory_path())
+	_log_menu("action=open_log_folder result=%s" % ("opened" if error == OK else "failed:%d" % error))
 
 func _show_quit_confirmation() -> void:
 	_log_menu("screen=quit_confirmation_opened")

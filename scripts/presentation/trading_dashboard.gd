@@ -986,6 +986,8 @@ func _show_debrief(day: int, resolutions: Array[Dictionary]) -> void:
 	content.add_child(_label("Resolved prices, player result, action markers, and ranking.", 12, MUTED))
 	debrief_day_series = _day_graph_series(resolutions)
 	debrief_game_series = _game_graph_series()
+	var rankings := _display_rankings()
+	_log_debrief_screen_values(day, resolutions, rankings)
 	var upper := HBoxContainer.new()
 	upper.add_theme_constant_override("separation", 10)
 	upper.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -1008,7 +1010,7 @@ func _show_debrief(day: int, resolutions: Array[Dictionary]) -> void:
 	news_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	news_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	lower.add_child(news_panel)
-	var rankings_panel := _build_rankings_panel(_display_rankings())
+	var rankings_panel := _build_rankings_panel(rankings)
 	rankings_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	rankings_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	lower.add_child(rankings_panel)
@@ -1127,6 +1129,8 @@ func _continue_after_debrief() -> void:
 func _show_brief(day: int) -> void:
 	if brief_panel != null or summary_panel != null:
 		return
+	var rankings := _display_rankings()
+	_log_brief_screen_values(day, rankings)
 	brief_layer = Control.new()
 	brief_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	brief_layer.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -1174,7 +1178,7 @@ func _show_brief(day: int) -> void:
 	upper.add_child(outlook_panel)
 	content.add_child(upper)
 	content.add_child(_label("YOUR HOLDINGS  |  CASH %s  |  %s" % [_format_pence(session.game_state.cash_pence), _holdings_text(session.game_state)], 13, TEXT))
-	content.add_child(_build_rankings_panel(_display_rankings()))
+	content.add_child(_build_rankings_panel(rankings))
 	var action_bar := HBoxContainer.new()
 	action_bar.custom_minimum_size.y = 42
 	action_bar.alignment = BoxContainer.ALIGNMENT_END
@@ -1219,6 +1223,81 @@ func _start_trading_from_brief() -> void:
 		brief_panel = null
 		start_trading_button = null
 
+func _log_brief_screen_values(day: int, rankings: Array) -> void:
+	var stocks: Array[Dictionary] = []
+	for stock in session.game_state.stocks:
+		stocks.append({
+			"symbol": stock.symbol,
+			"current_price_pence": stock.current_price_pence,
+			"news": stock.current_news,
+			"projection_percent": stock.projection_change * 100.0,
+			"projection_low_percent": stock.projection_low * 100.0,
+			"projection_high_percent": stock.projection_high * 100.0,
+		})
+	var readiness := {}
+	if session.network_mode:
+		readiness = {
+			"ready_count": session.network_trading_ready_count,
+			"total_count": session.network_trading_ready_total,
+			"local_ready": session.network_local_trading_ready,
+		}
+	print("[ui] brief_values=%s" % JSON.stringify({
+		"mode": "multiplayer" if session.network_mode else "single_player",
+		"day": day,
+		"cash_pence": session.game_state.cash_pence,
+		"holdings": session.game_state.holdings,
+		"stocks": stocks,
+		"rankings": _ranking_log_values(rankings),
+		"trading_readiness": readiness,
+	}))
+
+func _log_debrief_screen_values(day: int, resolutions: Array[Dictionary], rankings: Array) -> void:
+	var round_record: Dictionary = session.completed_rounds.back() if not session.completed_rounds.is_empty() else {}
+	var stock_results: Array[Dictionary] = []
+	for resolution in resolutions:
+		stock_results.append({
+			"symbol": str(resolution.get("symbol", "")),
+			"news": str(resolution.get("news", "")),
+			"opening_price_pence": int(resolution.get("opening_price_pence", 0)),
+			"closing_price_pence": int(resolution.get("closing_price_pence", 0)),
+			"change_percent": float(resolution.get("percentage_change", 0.0)) * 100.0,
+			"action_markers": _action_marker_text(resolution),
+		})
+	var day_chart: Array[Dictionary] = []
+	for series in debrief_day_series:
+		day_chart.append({"symbol": series["symbol"], "percent_values": series["values"]})
+	var game_chart: Array[Dictionary] = []
+	for series in debrief_game_series:
+		game_chart.append({"symbol": series["symbol"], "percent_values": series["values"]})
+	print("[ui] debrief_values=%s" % JSON.stringify({
+		"mode": "multiplayer" if session.network_mode else "single_player",
+		"day": day,
+		"player_result_pence": int(round_record.get("player_return_pence", session.game_state.total_return_pence())),
+		"player_portfolio_value_pence": int(round_record.get("player_portfolio_value_pence", session.game_state.portfolio_value_pence())),
+		"player_cash_pence": int(round_record.get("player_cash_pence", session.game_state.cash_pence)),
+		"stocks": stock_results,
+		"day_chart": day_chart,
+		"game_chart": game_chart,
+		"rankings": _ranking_log_values(rankings),
+	}))
+
+func _ranking_log_values(rankings: Array) -> Array[Dictionary]:
+	var values: Array[Dictionary] = []
+	for index in rankings.size():
+		var player: Dictionary = rankings[index]
+		var player_id := int(player.get("player_id", 0))
+		values.append({
+			"rank": index + 1,
+			"player_id": player_id,
+			"player": str(player.get("display_name", "PLAYER %d" % player_id)),
+			"risk_profile": str(player.get("risk_profile", "HUMAN")),
+			"cash_pence": int(player.get("cash_pence", 0)),
+			"portfolio_value_pence": int(player.get("portfolio_value_pence", 0)),
+			"return_pence": int(player.get("return_pence", 0)),
+			"holdings": player.get("holdings", {}),
+		})
+	return values
+
 func _on_run_completed(summary: Dictionary) -> void:
 	if summary_panel != null:
 		return
@@ -1257,7 +1336,18 @@ func _on_run_completed(summary: Dictionary) -> void:
 	content.add_child(_label("Total return: %s" % _signed_pence(profit), 18, POSITIVE if profit >= 0 else NEGATIVE))
 	content.add_child(_label("Days completed: %d" % int(summary["days_completed"]), 13, MUTED))
 	content.add_child(_label("Final holdings: %s" % _holdings_text_from_dictionary(summary.get("holdings", {})), 13, TEXT))
-	content.add_child(_build_rankings_panel(summary.get("ranking", [])))
+	var final_rankings: Array = summary.get("ranking", [])
+	print("[ui] run_summary_values=%s" % JSON.stringify({
+		"mode": "multiplayer" if session.network_mode else "single_player",
+		"days_completed": int(summary.get("days_completed", 0)),
+		"starting_cash_pence": int(summary.get("starting_cash_pence", 0)),
+		"final_cash_pence": int(summary.get("final_cash_pence", 0)),
+		"total_return_pence": profit,
+		"final_holdings": summary.get("holdings", {}),
+		"victory_player_id": winner_id,
+		"rankings": _ranking_log_values(final_rankings),
+	}))
+	content.add_child(_build_rankings_panel(final_rankings))
 	var action_bar := HBoxContainer.new()
 	action_bar.custom_minimum_size.y = 42
 	action_bar.alignment = BoxContainer.ALIGNMENT_END
