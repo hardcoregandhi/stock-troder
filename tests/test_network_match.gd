@@ -222,6 +222,16 @@ func test_lobby_uses_entered_names_and_hides_peer_ids() -> void:
 	assert_eq(players[0]["name"], "Morgan")
 	assert_eq(players[1]["name"], "Riley")
 
+func test_lobby_makes_duplicate_names_unique_case_insensitively() -> void:
+	var lobby := NETWORK_LOBBY.new()
+	track(lobby)
+	lobby.players = {
+		1: {"id": 1, "name": "Morgan", "ready": true},
+		2: {"id": 2, "name": "morgan (2)", "ready": true},
+		123_984_756: {"id": 123_984_756, "name": "", "ready": false},
+	}
+	assert_eq(lobby._unique_player_name(123_984_756, "MORGAN"), "MORGAN (3)")
+
 func test_debrief_records_and_rankings_match_each_player_state() -> void:
 	var session: TradingSession = TRADING_SESSION.new()
 	track(session)

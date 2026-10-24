@@ -6,6 +6,7 @@ param(
     [int]$Days = 3,
     [double]$RoundSeconds = 0.1,
     [int]$TimeoutSeconds = 30,
+    [switch]$DuplicateNames,
     [string]$GodotBin = $env:GODOT_BIN
 )
 
@@ -54,13 +55,14 @@ try {
         "--round-seconds=$RoundSeconds",
         "--players=$Players"
     )
-    $hostArguments = $commonArguments + @("--role=host", "--name=Host", "--report=$hostReport")
+    $hostName = if ($DuplicateNames) { "Trader" } else { "Host" }
+    $hostArguments = $commonArguments + @("--role=host", "--name=$hostName", "--report=$hostReport")
     $hostProcess = Start-Process -FilePath $GodotBin -ArgumentList $hostArguments -WorkingDirectory $repo -RedirectStandardOutput $hostOutput -RedirectStandardError ($hostOutput + ".err") -PassThru
     $processes += $hostProcess
     [void]$hostProcess.WaitForInputIdle(1000)
 
     for ($clientIndex = 0; $clientIndex -lt $clientReports.Count; $clientIndex++) {
-        $clientName = "Client$($clientIndex + 2)"
+        $clientName = if ($DuplicateNames) { "Trader" } else { "Client$($clientIndex + 2)" }
         $clientArguments = $commonArguments + @("--role=client", "--name=$clientName", "--report=$($clientReports[$clientIndex])")
         $clientProcess = Start-Process -FilePath $GodotBin -ArgumentList $clientArguments -WorkingDirectory $repo -RedirectStandardOutput $clientOutputs[$clientIndex] -RedirectStandardError ($clientOutputs[$clientIndex] + ".err") -PassThru
         $processes += $clientProcess
@@ -97,9 +99,13 @@ try {
     if ($hostReportData.phase -ne "COMPLETE" -or @($clientReportData | Where-Object { $_.phase -ne "COMPLETE" }).Count -ne 0) {
         throw "Network harness did not reach COMPLETE. Logs: $runDirectory"
     }
-    $expectedPlayerNames = @("Host")
+    $expectedPlayerNames = @($hostName)
     for ($playerId = 2; $playerId -le $Players; $playerId++) {
-        $expectedPlayerNames += "Client$playerId"
+        if ($DuplicateNames) {
+            $expectedPlayerNames += "Trader ($playerId)"
+        } else {
+            $expectedPlayerNames += "Client$playerId"
+        }
     }
     $expectedPlayerNamesText = @($expectedPlayerNames | Sort-Object) -join "|"
     $actualHostNames = @($hostReportData.player_names | Sort-Object) -join "|"

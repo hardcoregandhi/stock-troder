@@ -181,16 +181,33 @@ func player_display_name(peer_id: int) -> String:
 			return str(player["name"])
 	return "Player"
 
+func _unique_player_name(peer_id: int, player_name: String) -> String:
+	var normalized_name := player_name.strip_edges().left(MAX_PLAYER_NAME_LENGTH)
+	if normalized_name.is_empty():
+		normalized_name = player_display_name(peer_id)
+	var base_name := normalized_name
+	var suffix_number := 2
+	while _player_name_is_taken(peer_id, normalized_name):
+		var suffix := " (%d)" % suffix_number
+		normalized_name = base_name.left(MAX_PLAYER_NAME_LENGTH - suffix.length()) + suffix
+		suffix_number += 1
+	return normalized_name
+
+func _player_name_is_taken(peer_id: int, player_name: String) -> bool:
+	for player in players.values():
+		if int(player["id"]) == peer_id:
+			continue
+		if str(player.get("name", "")).to_lower() == player_name.to_lower():
+			return true
+	return false
+
 @rpc("any_peer", "reliable")
 func _submit_ready(ready_value: bool, player_name: String) -> void:
 	if not is_host or not multiplayer.is_server():
 		_log_network("remote readiness rejected: receiver is not host")
 		return
 	var peer_id := multiplayer.get_remote_sender_id()
-	var normalized_name := player_name.strip_edges().left(MAX_PLAYER_NAME_LENGTH)
-	if normalized_name.is_empty():
-		normalized_name = player_display_name(peer_id)
-	players[peer_id] = {"id": peer_id, "name": normalized_name, "ready": ready_value}
+	players[peer_id] = {"id": peer_id, "name": _unique_player_name(peer_id, player_name), "ready": ready_value}
 	_log_network("player readiness changed player=%d ready=%s" % [peer_id, str(ready_value).to_lower()])
 	_broadcast_players()
 
